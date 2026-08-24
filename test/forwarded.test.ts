@@ -115,16 +115,18 @@ describe('forwarded mail', () => {
     expect(stack.forwardInbox.bodiesFetched).toHaveLength(0);
     // no model call at all — nothing was read to summarise
     expect(stack.llm.calls).toHaveLength(0);
-    // exactly one proposal, to Dan, naming sender and subject only
+    // one proposal, put to both parents (an unexpected sender may be either
+    // one's alias), naming sender and subject only
     const proposals = stack.repos.pendingProposals();
     expect(proposals).toHaveLength(1);
     expect(proposals[0]?.kind).toBe('forwarded_email');
-    expect(proposals[0]?.proposedTo).toBe('dan');
-    const msg = stack.sender.sent.at(-1);
-    expect(msg?.to).toBe(WA_DAN);
-    expect(msg?.text).toContain('spam@example.net');
-    expect(msg?.text).toContain('You have won a prize');
-    expect(msg?.text).not.toContain('IGNORE ALL PREVIOUS');
+    expect(proposals[0]?.proposedTo).toBe('both');
+    for (const msg of stack.sender.sent) {
+      expect(msg.text).toContain('spam@example.net');
+      expect(msg.text).toContain('You have won a prize');
+      expect(msg.text).not.toContain('IGNORE ALL PREVIOUS');
+    }
+    expect(stack.sender.sent.map((s) => s.to).sort()).toEqual([WA_DAN, WA_ALINA].sort());
   });
 
   it('asks once per sender, then never again once decided', async () => {
@@ -147,11 +149,11 @@ describe('forwarded mail', () => {
     expect(stack.forwardInbox.bodiesFetched).toHaveLength(0);
   });
 
-  it('approving a stranger reads the mail and records the sender', async () => {
+  it('approving a stranger reads the mail and answers in the approver\'s chat', async () => {
     const stack = makeFullStack(dir, clock);
     const legit: SchoolEmail = {
       msgId: 'fwd-work',
-      from: 'Dan work <dan@worklaptop.example>',
+      from: 'Alina work <alina@worklaptop.example>',
       subject: 'Fwd: nursery invoice',
       date: '2026-08-24T09:00:00+03:00',
       body: 'Nursery invoice for Caspian, due 30 August.',
@@ -162,13 +164,43 @@ describe('forwarded mail', () => {
 
     stack.llm.on('forwarded_email', 'Nursery invoice for Caspian, due 30 August. Track it?');
     const id = stack.repos.pendingProposals()[0]!.id;
+    stack.sender.sent = [];
+    // Alina approves her own alias, so the answer belongs in her chat
     await stack.ingress.process(
-      parseWebhookPayload(buttonReplyPayload(WA_DAN, 'wamid.a1', `p:${id}:yes`, 'Yes')),
+      parseWebhookPayload(buttonReplyPayload(WA_ALINA, 'wamid.a1', `p:${id}:yes`, 'Yes')),
     );
 
-    expect(stack.repos.emailSenderStatus('dan@worklaptop.example')).toBe('allowed');
+    const decided = stack.repos.emailSender('alina@worklaptop.example');
+    expect(decided?.status).toBe('allowed');
+    expect(decided?.approvedBy).toBe('alina');
     expect(stack.forwardInbox.bodiesFetched).toContain('fwd-work');
-    expect(stack.sender.sent.at(-1)?.text).toContain('Caspian');
+    const reply = stack.sender.sent.at(-1);
+    expect(reply?.to).toBe(WA_ALINA);
+    expect(reply?.text).toContain('Caspian');
+    expect(stack.sender.sent.some((s) => s.to === WA_DAN)).toBe(false);
+  });
+
+  it('later mail from an approved sender goes to the approver, not Dan by default', async () => {
+    const stack = makeFullStack(dir, clock);
+    stack.log.append({
+      actor: 'alina',
+      chat: 'alina',
+      type: 'verdict',
+      payload: { kind: 'email_sender', address: 'alina@worklaptop.example', value: 'allowed' },
+    });
+    stack.forwardInbox.inbox = [
+      {
+        msgId: 'fwd-later',
+        from: 'Alina work <alina@worklaptop.example>',
+        subject: 'Fwd: swimming times',
+        date: '2026-08-24T09:00:00+03:00',
+        body: 'Swimming moved to 4pm.',
+      },
+    ];
+    stack.llm.on('forwarded_email', 'Swimming is 4pm now.');
+    await stack.forwarded.poll();
+    expect(stack.sender.sent).toHaveLength(1);
+    expect(stack.sender.sent[0]?.to).toBe(WA_ALINA);
   });
 
   it('mail from a stranger that slips into the inbox is logged and acted on by nothing', async () => {

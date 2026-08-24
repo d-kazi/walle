@@ -123,11 +123,19 @@ export class Repos {
   // -- forwarding inbox senders --------------------------------------------
 
   /** decision recorded for an unexpected sender, or null when never asked */
-  emailSenderStatus(address: string): 'allowed' | 'declined' | null {
+  emailSender(
+    address: string,
+  ): { status: 'allowed' | 'declined'; approvedBy: User } | null {
     const row = this.db
-      .prepare('SELECT status FROM email_senders WHERE address = ?')
-      .get(address.toLowerCase()) as { status: 'allowed' | 'declined' } | undefined;
-    return row?.status ?? null;
+      .prepare('SELECT status, approved_by FROM email_senders WHERE address = ?')
+      .get(address.toLowerCase()) as
+      | { status: 'allowed' | 'declined'; approved_by: User }
+      | undefined;
+    return row ? { status: row.status, approvedBy: row.approved_by } : null;
+  }
+
+  emailSenderStatus(address: string): 'allowed' | 'declined' | null {
+    return this.emailSender(address)?.status ?? null;
   }
 
   // -- unknown senders -----------------------------------------------------

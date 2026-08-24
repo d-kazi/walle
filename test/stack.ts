@@ -56,9 +56,9 @@ export function makeFullStack(dir: string, clock: FakeClock) {
     outbound,
     calendar,
     clock,
-    async (_address, msgId) => {
+    async (user, _address, msgId) => {
       const email = await forwardInbox.fetchOne(msgId);
-      if (email) await conversationRef.handleForwardedEmail('dan', email);
+      if (email) await conversationRef.handleForwardedEmail(user, email);
     },
   );
   const conversation = new Conversation({

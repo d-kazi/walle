@@ -24,7 +24,11 @@ export class Confirmations {
     private readonly calendar: CalendarService,
     private readonly clock: Clock = systemClock,
     /** approving mail from an unexpected sender: read it and act on it */
-    private readonly onForwardedApproved?: (address: string, msgId: string) => Promise<void>,
+    private readonly onForwardedApproved?: (
+      user: User,
+      address: string,
+      msgId: string,
+    ) => Promise<void>,
   ) {}
 
   async propose(
@@ -155,7 +159,7 @@ export class Confirmations {
       });
       if (this.onForwardedApproved && p.msgId) {
         try {
-          await this.onForwardedApproved(address, p.msgId);
+          await this.onForwardedApproved(user, address, p.msgId);
           return;
         } catch (err) {
           this.log.append({

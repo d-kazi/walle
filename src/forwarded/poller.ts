@@ -6,6 +6,8 @@ import type { User } from '../types/domain.js';
 import { type Clock, riyadhIso, systemClock } from '../util/time.js';
 
 const LOOKBACK_DAYS = 3;
+/** Gmail purges Trash at 30 days; look back that far so an outage loses nothing */
+const REFUSED_LOOKBACK_DAYS = 30;
 
 export type ForwardHandler = (user: User, email: SchoolEmail) => Promise<void>;
 
@@ -48,8 +50,8 @@ export class ForwardedPipeline {
     return this.deps.clock ?? systemClock;
   }
 
-  private since(): string {
-    return riyadhIso(new Date(this.clock.now().getTime() - LOOKBACK_DAYS * 86_400_000));
+  private since(days = LOOKBACK_DAYS): string {
+    return riyadhIso(new Date(this.clock.now().getTime() - days * 86_400_000));
   }
 
   /** Resolve a From header to a user: the two configured addresses, plus any sender approved since. */
@@ -58,9 +60,10 @@ export class ForwardedPipeline {
     if (!address) return null;
     const direct = this.allowed.get(address);
     if (direct) return direct;
-    // an approved unexpected sender is treated as Dan's, since Dan is the
-    // one who approved it
-    return this.deps.repos.emailSenderStatus(address) === 'allowed' ? 'dan' : null;
+    // an approved sender is answered in the chat of whoever approved it —
+    // Alina's work alias must not start replying into Dan's chat
+    const decided = this.deps.repos.emailSender(address);
+    return decided?.status === 'allowed' ? decided.approvedBy : null;
   }
 
   async poll(): Promise<void> {
@@ -135,7 +138,7 @@ export class ForwardedPipeline {
     const d = this.deps;
     let refused: Array<Omit<SchoolEmail, 'body'>>;
     try {
-      refused = await d.inbox.listRefused(this.since());
+      refused = await d.inbox.listRefused(this.since(REFUSED_LOOKBACK_DAYS));
     } catch (err) {
       d.log.append({
         actor: 'system',
@@ -150,13 +153,15 @@ export class ForwardedPipeline {
       const address = extractAddress(email.from);
       if (!address) continue;
       if (this.allowed.has(address)) continue; // ours, just binned by hand
-      if (d.repos.emailSenderStatus(address) !== null) continue; // already decided
+      if (d.repos.emailSender(address) !== null) continue; // already decided
       if (asked.has(address)) continue; // one question per sender per run
       asked.add(address);
+      // both parents are asked: an unexpected sender may be either one's
+      // alias, and whoever answers owns the follow-up
       await d.confirmations.propose(
         'forwarded_email',
         { msgId: email.msgId, address, subject: email.subject, title: `Mail from ${address}` },
-        'dan',
+        'both',
         `Something reached the Wall-E address from ${address}, subject "${truncate(email.subject, 60)}". I have not opened it. Read and act on it?`,
       );
     }

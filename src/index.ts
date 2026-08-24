@@ -89,9 +89,9 @@ const confirmations = new Confirmations(
   calendar,
   systemClock,
   // approving a stranger's mail: read it in full and treat it as a forward
-  async (_address, msgId) => {
+  async (user, _address, msgId) => {
     const email = await forwardInbox.fetchOne(msgId);
-    if (email) await conversation.handleForwardedEmail('dan', email);
+    if (email) await conversation.handleForwardedEmail(user, email);
   },
 );
 const conversation = new Conversation({

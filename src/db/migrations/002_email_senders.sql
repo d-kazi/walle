@@ -5,5 +5,8 @@
 CREATE TABLE email_senders (
   address TEXT PRIMARY KEY,
   status TEXT NOT NULL CHECK (status IN ('allowed', 'declined')),
+  -- which parent decided; later mail from an allowed sender is answered in
+  -- their chat, not assumed to be Dan's
+  approved_by TEXT NOT NULL,
   ts TEXT NOT NULL
 );
