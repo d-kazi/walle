@@ -148,8 +148,18 @@ export class Projector {
   }
 
   private applyVerdict(ev: WalleEvent): void {
-    const p = ev.payload as { kind?: string; msgId?: string; value?: string };
-    if (!p.msgId) return;
+    const p = ev.payload as { kind?: string; msgId?: string; value?: string; address?: string };
+    if (p.kind !== 'email_sender' && !p.msgId) return;
+    if (p.kind === 'email_sender') {
+      // an unexpected sender the user allowed or declined (forwarding inbox)
+      this.db
+        .prepare(
+          `INSERT INTO email_senders (address, status, ts) VALUES (?, ?, ?)
+           ON CONFLICT(address) DO UPDATE SET status = excluded.status, ts = excluded.ts`,
+        )
+        .run(String(p.address ?? '').toLowerCase(), p.value, ev.ts);
+      return;
+    }
     if (p.kind === 'email_classified') {
       this.db
         .prepare('UPDATE email_index SET classified_as = ? WHERE msg_id = ?')

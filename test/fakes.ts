@@ -11,6 +11,7 @@ import type {
   CalendarService,
   DriveFile,
   DriveService,
+  ForwardInbox,
   SchoolEmail,
   SchoolInbox,
 } from '../src/google/types.js';
@@ -171,4 +172,31 @@ export class FakeDrive implements DriveService {
     }));
   }
   async deleteBackup(): Promise<void> {}
+}
+
+/**
+ * The dedicated forwarding mailbox. `inbox` is mail the Gmail filter let
+ * through; `trash` is mail it refused. `bodiesFetched` records every
+ * full-read, so tests can assert a stranger's body was never opened.
+ */
+export class FakeForwardInbox implements ForwardInbox {
+  inbox: SchoolEmail[] = [];
+  trash: SchoolEmail[] = [];
+  bodiesFetched: string[] = [];
+
+  async listNewEmails(sinceIso: string): Promise<SchoolEmail[]> {
+    const out = this.inbox.filter((e) => e.date > sinceIso);
+    for (const e of out) this.bodiesFetched.push(e.msgId);
+    return out;
+  }
+  async listRefused(sinceIso: string): Promise<Array<Omit<SchoolEmail, 'body'>>> {
+    return this.trash
+      .filter((e) => e.date > sinceIso)
+      .map(({ body: _body, ...rest }) => rest);
+  }
+  async fetchOne(msgId: string): Promise<SchoolEmail | null> {
+    const found = [...this.inbox, ...this.trash].find((e) => e.msgId === msgId) ?? null;
+    if (found) this.bodiesFetched.push(msgId);
+    return found;
+  }
 }

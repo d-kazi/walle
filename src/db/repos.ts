@@ -120,6 +120,16 @@ export class Repos {
     );
   }
 
+  // -- forwarding inbox senders --------------------------------------------
+
+  /** decision recorded for an unexpected sender, or null when never asked */
+  emailSenderStatus(address: string): 'allowed' | 'declined' | null {
+    const row = this.db
+      .prepare('SELECT status FROM email_senders WHERE address = ?')
+      .get(address.toLowerCase()) as { status: 'allowed' | 'declined' } | undefined;
+    return row?.status ?? null;
+  }
+
   // -- unknown senders -----------------------------------------------------
 
   unknownSenderLastAlert(waId: string): { known: boolean; lastAlertTs: string | null } {

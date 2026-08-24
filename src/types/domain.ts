@@ -28,7 +28,7 @@ export interface OpenItem {
   lastNudge: string | null; // ISO ts of last chase nudge
 }
 
-export type ProposalKind = 'calendar_event' | 'open_item';
+export type ProposalKind = 'calendar_event' | 'open_item' | 'forwarded_email';
 
 export interface CalendarEventDraft {
   title: string;

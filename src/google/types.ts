@@ -39,19 +39,6 @@ export interface SchoolInbox {
   probe(): Promise<boolean>;
 }
 
-export interface PersonalEmailMeta {
-  from: string;
-  subject: string;
-  unread: boolean;
-}
-
-export interface PersonalInbox {
-  /** metadata-only triage counts for one user's inbox */
-  unreadSummary(user: User): Promise<{ count: number; recent: PersonalEmailMeta[] }>;
-  /** full read of the single 'walle' label */
-  readWalleLabel(user: User): Promise<SchoolEmail[]>;
-}
-
 export interface DriveFile {
   id: string;
   name: string;
@@ -65,4 +52,18 @@ export interface DriveService {
   uploadBackup(name: string, localPath: string): Promise<void>;
   listBackups(): Promise<DriveFile[]>;
   deleteBackup(fileId: string): Promise<void>;
+}
+
+/**
+ * The dedicated forwarding mailbox. Dan and Alina forward mail here; a Gmail
+ * filter sends anything from another sender straight to Trash. Read-only:
+ * Wall-E cannot delete, so Gmail's own 30-day Trash purge does the disposal.
+ */
+export interface ForwardInbox {
+  /** delivered mail newer than the given ISO date, oldest first, bodies included */
+  listNewEmails(sinceIso: string): Promise<SchoolEmail[]>;
+  /** refused mail sitting in Trash — sender and subject only, never a body */
+  listRefused(sinceIso: string): Promise<Array<Omit<SchoolEmail, 'body'>>>;
+  /** full read of one message, used only after a user approves its sender */
+  fetchOne(msgId: string): Promise<SchoolEmail | null>;
 }

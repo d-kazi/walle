@@ -19,19 +19,20 @@ import { LedgerReader } from './ledger/read.js';
 import { createLedgerRouter } from './ledger/route.js';
 import { createGoogleAuths } from './google/auth.js';
 import { GoogleCalendarService } from './google/calendar.js';
-import { GmailPersonalInbox, GmailSchoolInbox } from './google/gmail.js';
+import { GmailForwardInbox, GmailSchoolInbox } from './google/gmail.js';
 import { GoogleDriveService } from './google/drive.js';
 import { Confirmations } from './assistant/confirmations.js';
 import { Conversation } from './assistant/conversation.js';
 import { Briefs } from './briefs/briefs.js';
 import { WeeklyRollup } from './briefs/weekly.js';
 import { SchoolPipeline } from './school/pipeline.js';
+import { ForwardedPipeline } from './forwarded/poller.js';
 import { Prober } from './scheduler/probe.js';
 import { registerJobs } from './scheduler/cron.js';
 import { createHealthRouter } from './ops/health.js';
 import { Backup } from './ops/backup.js';
 import { USERS } from './types/domain.js';
-import { riyadhDate } from './util/time.js';
+import { riyadhDate, systemClock } from './util/time.js';
 import path from 'node:path';
 
 const config = loadConfig();
@@ -63,7 +64,7 @@ const llm = new OpenAiCompatClient(
 const memory = new MemoryStore(config.dataDir);
 const ledger = new LedgerReader(config.dataDir);
 
-// google, three principals
+// google, four principals
 const auths = createGoogleAuths({
   clientId: env.GOOGLE_CLIENT_ID,
   clientSecret: env.GOOGLE_CLIENT_SECRET,
@@ -71,15 +72,28 @@ const auths = createGoogleAuths({
     dan: env.GOOGLE_REFRESH_DAN,
     alina: env.GOOGLE_REFRESH_ALINA,
     school: env.GOOGLE_REFRESH_SCHOOL,
+    walle: env.GOOGLE_REFRESH_WALLE,
   },
 });
 const calendar = new GoogleCalendarService(auths);
 const schoolInbox = new GmailSchoolInbox(auths);
-const personalInbox = new GmailPersonalInbox(auths);
+const forwardInbox = new GmailForwardInbox(auths);
 const drive = new GoogleDriveService(auths, env.FAMILY_DRIVE_FOLDER_ID);
 
 // behaviour
-const confirmations = new Confirmations(log, repos, outbound, calendar);
+let forwarded: ForwardedPipeline;
+const confirmations = new Confirmations(
+  log,
+  repos,
+  outbound,
+  calendar,
+  systemClock,
+  // approving a stranger's mail: read it in full and treat it as a forward
+  async (_address, msgId) => {
+    const email = await forwardInbox.fetchOne(msgId);
+    if (email) await conversation.handleForwardedEmail('dan', email);
+  },
+);
 const conversation = new Conversation({
   log,
   repos,
@@ -87,7 +101,6 @@ const conversation = new Conversation({
   ledger,
   calendar,
   drive,
-  personalInbox,
   llm,
   outbound,
   confirmations,
@@ -105,6 +118,15 @@ const ingress = new Ingress(
 const briefs = new Briefs({ log, repos, llm, outbound, ledger, calendar });
 const weekly = new WeeklyRollup({ log, repos, llm, outbound, memory });
 const school = new SchoolPipeline({ log, repos, llm, inbox: schoolInbox, confirmations });
+forwarded = new ForwardedPipeline({
+  log,
+  repos,
+  inbox: forwardInbox,
+  confirmations,
+  emailDan: env.EMAIL_DAN,
+  emailAlina: env.EMAIL_ALINA,
+  handler: (user, email) => conversation.handleForwardedEmail(user, email),
+});
 const curator = new Curator({ log, llm, memory, logDir: path.join(config.dataDir, 'log') });
 const prober = new Prober(log, outbound, sender, calendar, schoolInbox);
 const backup = new Backup(log, db, drive, config.dataDir);
@@ -177,16 +199,18 @@ registerJobs(log, [
     name: 'School inbox (day)',
     schedule: '*/15 6-19 * * *',
     run: async () => {
-      const probe = await prober.probe('School poll', ['school']);
+      const probe = await prober.probe('Mail poll', ['school']);
       if (!probe.failed.includes('school')) await school.poll();
+      await forwarded.poll();
     },
   },
   {
     name: 'School inbox (night)',
     schedule: '0 0-5,20-23 * * *',
     run: async () => {
-      const probe = await prober.probe('School poll', ['school']);
+      const probe = await prober.probe('Mail poll', ['school']);
       if (!probe.failed.includes('school')) await school.poll();
+      await forwarded.poll();
     },
   },
   {

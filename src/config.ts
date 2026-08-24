@@ -28,7 +28,12 @@ const envSchema = z.object({
   GOOGLE_REFRESH_DAN: z.string().min(1),
   GOOGLE_REFRESH_ALINA: z.string().min(1),
   GOOGLE_REFRESH_SCHOOL: z.string().min(1),
+  GOOGLE_REFRESH_WALLE: z.string().min(1),
   FAMILY_DRIVE_FOLDER_ID: z.string().min(1),
+
+  /** the two addresses allowed to forward mail into the walle inbox */
+  EMAIL_DAN: z.string().email(),
+  EMAIL_ALINA: z.string().email(),
 
   LEDGER_PUSH_TOKEN: z.string().min(16),
 
@@ -64,6 +69,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): Config {
       env.GOOGLE_REFRESH_DAN,
       env.GOOGLE_REFRESH_ALINA,
       env.GOOGLE_REFRESH_SCHOOL,
+      env.GOOGLE_REFRESH_WALLE,
       env.LEDGER_PUSH_TOKEN,
     ],
   };
