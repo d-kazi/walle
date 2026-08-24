@@ -177,6 +177,15 @@ export class Repos {
       .filter((t) => t.text.length > 0);
   }
 
+  /** has a trigger event with the given kind and payload fragment been logged? */
+  hasTrigger(kind: string, fragment?: string): boolean {
+    const rows = this.db
+      .prepare(`SELECT payload FROM events WHERE type = 'trigger' AND payload LIKE ?`)
+      .all(`%"kind":"${kind}"%`) as Array<{ payload: string }>;
+    if (!fragment) return rows.length > 0;
+    return rows.some((r) => r.payload.includes(fragment));
+  }
+
   // -- llm telemetry -------------------------------------------------------
 
   llmStats(fromTs: string): Array<{

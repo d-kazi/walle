@@ -11,6 +11,8 @@ const envSchema = z.object({
   META_WA_PHONE_ID: z.string().min(1),
   META_WA_VERIFY_TOKEN: z.string().min(1),
   META_APP_SECRET: z.string().min(1),
+  /** WhatsApp Business Account id; optional, used only to surface template approval in /health */
+  META_WABA_ID: z.string().optional(),
   WA_ID_DAN: z.string().min(1),
   WA_ID_ALINA: z.string().min(1),
 

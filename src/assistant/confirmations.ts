@@ -5,7 +5,7 @@ import type { Outbound } from '../send/outbound.js';
 import type { CalendarService } from '../google/types.js';
 import type { CalendarEventDraft, Proposal, ProposalKind, User } from '../types/domain.js';
 import { USERS, otherUser } from '../types/domain.js';
-import { type Clock, riyadhDate, systemClock } from '../util/time.js';
+import { type Clock, systemClock } from '../util/time.js';
 
 /**
  * The Tier 2 gate. Every world-touching action becomes a proposal that a

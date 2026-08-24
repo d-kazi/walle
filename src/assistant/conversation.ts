@@ -3,7 +3,7 @@ import type { EventLog } from '../log/eventLog.js';
 import type { Repos } from '../db/repos.js';
 import type { MemoryStore } from '../memory/store.js';
 import type { LedgerReader } from '../ledger/read.js';
-import type { CalendarService } from '../google/types.js';
+import type { CalendarService, DriveService, PersonalInbox } from '../google/types.js';
 import type { LlmClient } from '../llm/client.js';
 import type { Outbound } from '../send/outbound.js';
 import type { Confirmations } from './confirmations.js';
@@ -30,6 +30,8 @@ export class Conversation {
       memory: MemoryStore;
       ledger: LedgerReader;
       calendar: CalendarService;
+      drive?: DriveService;
+      personalInbox?: PersonalInbox;
       llm: LlmClient;
       outbound: Outbound;
       confirmations: Confirmations;
@@ -106,6 +108,8 @@ export class Conversation {
       ledger: d.ledger,
       calendar: d.calendar,
       confirmations: d.confirmations,
+      ...(d.drive ? { drive: d.drive } : {}),
+      ...(d.personalInbox ? { personalInbox: d.personalInbox } : {}),
       clock: this.clock,
       ctx: { user, forcedScope: forced?.scope ?? null },
     });

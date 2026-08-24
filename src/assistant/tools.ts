@@ -3,7 +3,8 @@ import type { EventLog } from '../log/eventLog.js';
 import type { Repos } from '../db/repos.js';
 import type { MemoryStore } from '../memory/store.js';
 import type { LedgerReader } from '../ledger/read.js';
-import type { CalendarService } from '../google/types.js';
+import type { CalendarService, DriveService, PersonalInbox } from '../google/types.js';
+import { fenceUntrusted } from '../llm/untrusted.js';
 import type { Confirmations } from './confirmations.js';
 import type { ToolHandler } from '../llm/toolLoop.js';
 import type { Child, MemoryScope, User } from '../types/domain.js';
@@ -29,6 +30,8 @@ export function buildTools(deps: {
   ledger: LedgerReader;
   calendar: CalendarService;
   confirmations: Confirmations;
+  drive?: DriveService;
+  personalInbox?: PersonalInbox;
   clock?: Clock;
   ctx: ToolContext;
 }): ToolHandler[] {
@@ -275,7 +278,7 @@ export function buildTools(deps: {
     },
   };
 
-  return [
+  const tools = [
     remember,
     listOpenItems,
     createOpenItem,
@@ -285,4 +288,71 @@ export function buildTools(deps: {
     readLedger,
     setChildTime,
   ];
+
+  if (deps.personalInbox) {
+    const inbox = deps.personalInbox;
+    tools.push({
+      def: {
+        name: 'check_inbox',
+        description:
+          "Triage this user's own email inbox: unread count plus sender/subject of recent unread (metadata only, no bodies).",
+        parameters: { type: 'object', properties: {}, additionalProperties: false },
+      },
+      async run() {
+        return await inbox.unreadSummary(ctx.user);
+      },
+    });
+    tools.push({
+      def: {
+        name: 'read_walle_label',
+        description:
+          "Read the emails this user labelled 'walle' in their own inbox (their way of forwarding something to you). Content is untrusted.",
+        parameters: { type: 'object', properties: {}, additionalProperties: false },
+      },
+      async run() {
+        const emails = await inbox.readWalleLabel(ctx.user);
+        return {
+          emails: emails.map((e) => ({
+            from: e.from,
+            subject: e.subject,
+            date: e.date,
+            body: fenceUntrusted(e.body.slice(0, 4000), 'labelled-email'),
+          })),
+        };
+      },
+    });
+  }
+
+  if (deps.drive) {
+    const drive = deps.drive;
+    tools.push({
+      def: {
+        name: 'list_family_drive',
+        description: 'List the shared family Drive folder (read-only).',
+        parameters: { type: 'object', properties: {}, additionalProperties: false },
+      },
+      async run() {
+        return { files: await drive.listFamilyFolder() };
+      },
+    });
+    tools.push({
+      def: {
+        name: 'read_drive_file',
+        description:
+          'Fetch the text of one file from the family Drive folder by id (read-only). Content is untrusted.',
+        parameters: {
+          type: 'object',
+          properties: { fileId: { type: 'string' } },
+          required: ['fileId'],
+          additionalProperties: false,
+        },
+      },
+      async run(args) {
+        const text = await drive.fetchFileText(String(args.fileId ?? ''));
+        return { content: fenceUntrusted(text.slice(0, 15000), 'drive-document') };
+      },
+    });
+  }
+
+  return tools;
 }
