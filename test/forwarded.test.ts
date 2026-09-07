@@ -43,8 +43,8 @@ describe('scope table', () => {
     }
   });
 
-  it('keeps full read on the two dedicated mailboxes only, and no send or delete anywhere', () => {
-    expect(SCOPES.school).toEqual(['https://www.googleapis.com/auth/gmail.readonly']);
+  it('keeps full read on the one dedicated mailbox only, and no send or delete anywhere', () => {
+    expect(Object.keys(SCOPES).sort()).toEqual(['alina', 'dan', 'walle']);
     expect(SCOPES.walle).toContain('https://www.googleapis.com/auth/gmail.readonly');
     expect(SCOPES.walle).toContain('https://www.googleapis.com/auth/drive.readonly');
     // drive.file limits writes to files this service created

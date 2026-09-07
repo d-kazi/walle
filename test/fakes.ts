@@ -13,7 +13,6 @@ import type {
   DriveService,
   ForwardInbox,
   SchoolEmail,
-  SchoolInbox,
 } from '../src/google/types.js';
 import type { CalendarEventDraft, User } from '../src/types/domain.js';
 
@@ -140,17 +139,6 @@ export class FakeCalendar implements CalendarService {
   }
 }
 
-export class FakeSchoolInbox implements SchoolInbox {
-  emails: SchoolEmail[] = [];
-  probeOk = true;
-  async listNewEmails(sinceIso: string): Promise<SchoolEmail[]> {
-    return this.emails.filter((e) => e.date > sinceIso);
-  }
-  async probe(): Promise<boolean> {
-    return this.probeOk;
-  }
-}
-
 export class FakeDrive implements DriveService {
   files: DriveFile[] = [];
   backups: Array<{ name: string; localPath: string }> = [];
@@ -183,6 +171,11 @@ export class FakeForwardInbox implements ForwardInbox {
   inbox: SchoolEmail[] = [];
   trash: SchoolEmail[] = [];
   bodiesFetched: string[] = [];
+  probeOk = true;
+
+  async probe(): Promise<boolean> {
+    return this.probeOk;
+  }
 
   async listNewEmails(sinceIso: string): Promise<SchoolEmail[]> {
     const out = this.inbox.filter((e) => e.date > sinceIso);

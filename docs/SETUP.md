@@ -10,12 +10,11 @@ Roughly 90 minutes, most of it waiting on Google and Meta. You need a payment ca
 
 Read this before you click through any consent screen, so nothing surprises you.
 
-**Four Google accounts, four grants:**
+**Three Google accounts, three grants:**
 
 | Account | What it can do |
 | --- | --- |
-| School Gmail (new, dedicated) | Read everything in that mailbox. It only ever receives BISR mail. |
-| Wall·E Gmail (new, dedicated) | Read everything in that mailbox, including Trash. Also reads the family Drive folder you share with it, and writes backup archives it creates. |
+| Wall·E Gmail (new, dedicated) | Read everything in that mailbox, including Trash. School mail and your forwards both land here. Also reads the family Drive folder you share with it, and writes backup archives it creates. |
 | Your personal Google | Read and write **calendar events**. Nothing else. |
 | Alina's personal Google | Read and write **calendar events**. Nothing else. |
 
@@ -49,15 +48,15 @@ Without `LLM_API_KEY` it echoes rather than thinking, which is enough to see the
 
 ---
 
-## 2. Two new Gmail accounts
+## 2. One new Gmail account
 
-**The school inbox**, e.g. `kaziyev.school@gmail.com`. Create it, then set BISR to redirect or forward mail into it. Send yourself a test from another address and confirm it lands before moving on. If BISR cannot redirect, set a forwarding rule from whichever account currently receives school mail.
+**The Wall·E inbox**, `wallekaziyev@gmail.com`. One mailbox for everything Wall·E reads in full: school mail, and anything you or Alina forward. It tells the two apart by keyword. Mail with `bisr` anywhere in the sender, subject or body goes down the school pipeline (dates and deadlines proposed to both of you); everything else from you or Alina is answered in the forwarder's chat. The keyword list is `SCHOOL_KEYWORDS`, comma-separated, if the school's domain ever changes.
 
-**The Wall·E inbox**, e.g. `kaziyev.walle@gmail.com`. This is where you and Alina forward anything you want read in full. Two things to set up in it:
+Two filters to set up in it:
 
-*Filter one — let your mail through.* Settings → Filters → Create. From: `your@address.com OR alina@address.com`. Action: **Never send it to Spam**.
+*Filter one — let the right senders through.* Settings → Filters → Create. From: `your@address.com OR alina@address.com OR @bisr.edu.sa` (check the exact school domain on a real BISR email). Action: **Never send it to Spam**.
 
-*Filter two — refuse everyone else.* Create another filter. In the From box put `-{your@address.com alina@address.com}` (the minus means "not from these"). Action: **Delete it**. That sends anything from anyone else to Trash, where Gmail purges it after 30 days.
+*Filter two — refuse everyone else.* Create another filter. In the From box put `-{your@address.com alina@address.com @bisr.edu.sa}` (the minus means "not from these"). Action: **Delete it**. That sends anything from anyone else to Trash, where Gmail purges it after 30 days.
 
 That second filter is the door. Wall·E holds no delete permission and cannot bin anything itself, so Gmail does it. Mail that hits Trash is still visible to Wall·E as a sender and a subject line — never a body — and it asks both of you before opening anything. Whoever answers owns it: approve, and the mail is read and answered in their chat, and that sender is remembered as theirs. Say no and it is never raised again. Ignore it and Gmail purges it at 30 days, which is also as far back as Wall·E looks, so nothing is quietly lost if the service is down for a few days.
 
@@ -67,19 +66,21 @@ Save the Wall·E address as a contact called Wall·E on both your phones. Forwar
 
 ---
 
-## 3. One filter on each personal account
+## 3. Getting school mail into it
 
-In your personal Gmail, and again in Alina's: create a filter with From `@bisr.edu.sa` (check the exact domain on a real school email), action **Forward to** the school inbox. You will have to verify the forwarding address once, in the Wall·E account's own settings.
+Best: give BISR `wallekaziyev@gmail.com` as a parent contact address, so school mail arrives directly.
 
-This is what replaced giving Wall·E access to your personal inboxes. School mail that lands in the wrong place still reaches the school pipeline, and no permission is involved.
+Until the school updates its records, or as a permanent belt and braces: in whichever account currently receives school mail (yours, Alina's, or the existing school address), Settings → Forwarding → **Add a forwarding address** → the Wall·E address → click the link in the confirmation mail that lands in the Wall·E inbox. Then Settings → Filters → Create → From `@bisr.edu.sa` → **Forward it to** the Wall·E address.
+
+This is what replaced giving Wall·E access to your personal inboxes. No permission is involved. A school mail you forward by hand from your phone works too: it arrives from your address with the school's headers in the body, and the keyword catches it.
 
 ---
 
-## 4. Google Cloud and four consents
+## 4. Google Cloud and three consents
 
 1. console.cloud.google.com → new project, call it `walle`.
 2. APIs & Services → Library → enable **Gmail API**, **Google Calendar API**, **Google Drive API**.
-3. OAuth consent screen → **External** → fill the required fields → under Test users add all four addresses (both dedicated, both personal). Leave it in Testing mode; you do not need verification for four accounts you own.
+3. OAuth consent screen → **External** → fill the required fields → under Test users add all three addresses (the Wall·E account, yours, Alina's). Leave it in Testing mode; you do not need verification for three accounts you own.
 4. Credentials → Create credentials → **OAuth client ID** → application type **Desktop app**. Copy the client ID and secret.
 
 Now run the helper once per account, on your laptop:
@@ -88,17 +89,15 @@ Now run the helper once per account, on your laptop:
 export GOOGLE_CLIENT_ID=...
 export GOOGLE_CLIENT_SECRET=...
 
-npm run auth -- school   # sign in as the school Gmail
 npm run auth -- walle    # sign in as the Wall·E Gmail
 npm run auth -- dan      # sign in as your personal Google
 npm run auth -- alina    # Alina signs in on her own account
 ```
 
-Each opens a consent URL, listens on `http://localhost:8765/callback`, and prints one line like `GOOGLE_REFRESH_SCHOOL=1//0g...`. Keep all four; they go into Railway in section 7.
+Each opens a consent URL, listens on `http://localhost:8765/callback`, and prints one line like `GOOGLE_REFRESH_WALLE=1//0g...`. Keep all three; they go into Railway in section 7.
 
 What each consent screen should say, so you can check nothing is wider than intended:
 
-- **school** — read your email messages and settings
 - **walle** — read your email messages and settings; see and download your Drive files; see and manage files you open or create with this app
 - **dan** and **alina** — view and edit events on all your calendars. **If either personal screen mentions Gmail or Drive, stop and tell me.** That would mean the scope table regressed, and there is a test guarding exactly that.
 
@@ -165,9 +164,10 @@ Everything in the table below is required except `META_WABA_ID` and `WALLE_MODEL
 | `WALLE_MODEL_ESCALATED` | same slug, or a stronger one for drafting |
 | `GROQ_API_KEY` | section 5 |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | section 4 |
-| `GOOGLE_REFRESH_SCHOOL`, `GOOGLE_REFRESH_WALLE`, `GOOGLE_REFRESH_DAN`, `GOOGLE_REFRESH_ALINA` | section 4, the four printed lines |
+| `GOOGLE_REFRESH_WALLE`, `GOOGLE_REFRESH_DAN`, `GOOGLE_REFRESH_ALINA` | section 4, the three printed lines |
 | `FAMILY_DRIVE_FOLDER_ID` | section 2, from the folder URL |
-| `EMAIL_DAN`, `EMAIL_ALINA` | your two personal email addresses, the only senders the Wall·E inbox accepts |
+| `EMAIL_DAN`, `EMAIL_ALINA` | your two personal email addresses; with the school, the only senders the Wall·E inbox accepts |
+| `SCHOOL_KEYWORDS` | optional, default `bisr`; comma-separated words that mark school mail |
 | `LEDGER_PUSH_TOKEN` | section 5, the openssl output |
 | `TZ` | `Asia/Riyadh` |
 | `DATA_DIR` | `/data` |
@@ -292,6 +292,8 @@ Both are prompt edits, then redeploy. Neither needs code.
 | `POST /ledger` returns 401 | Bearer token mismatch | Header must be `Authorization: Bearer <LEDGER_PUSH_TOKEN>` exactly. |
 | `POST /ledger` returns 400 | Wrong body shape | Needs `lastSync`, `monthToDate` (object of numbers), optional `notableDeltas`. |
 | A forward gets no reply | Sender does not match `EMAIL_DAN`/`EMAIL_ALINA`, or filter two binned it | Check which address you actually forwarded from. Aliases and work accounts count as strangers, by design — you both get asked once, and whoever approves owns that sender from then on. |
+| A forward about something unrelated came back as a school proposal | A school keyword appeared in it | Expected: the keyword is deliberately greedy. Decline the proposal. If it keeps happening, narrow `SCHOOL_KEYWORDS` to the school's domain. |
+| School mail is being asked about as "looks like school mail in the bin" | Filter one does not include the school's real sending domain | Open a real BISR email, read the exact domain after the @, add it to both filters. Approve the pending one; it is processed as school mail. |
 | Nightly backup fails | The Wall·E account cannot create a folder in a folder it does not own | Share the family folder as **Editor**, or transfer ownership to the Wall·E account. Look for `backup_failed` in `recentErrors`. |
 
 ---

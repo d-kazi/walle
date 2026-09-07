@@ -1,56 +1,12 @@
 import { google } from 'googleapis';
 import type { GoogleAuths } from './auth.js';
-import type { ForwardInbox, SchoolEmail, SchoolInbox } from './types.js';
-
-/** School inbox: full read of the dedicated Gmail, nothing else. */
-export class GmailSchoolInbox implements SchoolInbox {
-  constructor(private readonly auths: GoogleAuths) {}
-
-  private gmail() {
-    return google.gmail({ version: 'v1', auth: this.auths.clientFor('school') });
-  }
-
-  async listNewEmails(sinceIso: string): Promise<SchoolEmail[]> {
-    const gmail = this.gmail();
-    const afterEpoch = Math.floor(new Date(sinceIso).getTime() / 1000);
-    const list = await gmail.users.messages.list({
-      userId: 'me',
-      q: `after:${afterEpoch}`,
-      maxResults: 25,
-    });
-    const out: SchoolEmail[] = [];
-    for (const ref of list.data.messages ?? []) {
-      if (!ref.id) continue;
-      const msg = await gmail.users.messages.get({ userId: 'me', id: ref.id, format: 'full' });
-      const headers = msg.data.payload?.headers ?? [];
-      const header = (name: string) =>
-        headers.find((h) => h.name?.toLowerCase() === name)?.value ?? '';
-      out.push({
-        msgId: ref.id,
-        from: header('from'),
-        subject: header('subject'),
-        date: new Date(Number(msg.data.internalDate ?? Date.now())).toISOString(),
-        body: extractPlainText(msg.data.payload).slice(0, 20000),
-      });
-    }
-    return out.sort((a, b) => a.date.localeCompare(b.date));
-  }
-
-  async probe(): Promise<boolean> {
-    try {
-      await this.gmail().users.getProfile({ userId: 'me' });
-      return true;
-    } catch {
-      return false;
-    }
-  }
-}
+import type { ForwardInbox, SchoolEmail } from './types.js';
 
 /**
- * The dedicated forwarding mailbox, read via the `walle` principal.
- * Delivered mail is read in full; mail the Gmail filter binned is listed
- * from TRASH with metadata only, so a stranger's body is never fetched
- * before a user approves the sender.
+ * The one dedicated mailbox, read via the `walle` principal. Delivered mail
+ * is read in full; mail the Gmail filter binned is listed from TRASH with
+ * metadata only, so a stranger's body is never fetched before a user
+ * approves the sender.
  */
 export class GmailForwardInbox implements ForwardInbox {
   constructor(private readonly auths: GoogleAuths) {}
@@ -126,6 +82,15 @@ export class GmailForwardInbox implements ForwardInbox {
       date: new Date(Number(msg.data.internalDate ?? Date.now())).toISOString(),
       body: extractPlainText(msg.data.payload).slice(0, 20000),
     };
+  }
+
+  async probe(): Promise<boolean> {
+    try {
+      await this.gmail().users.getProfile({ userId: 'me' });
+      return true;
+    } catch {
+      return false;
+    }
   }
 }
 

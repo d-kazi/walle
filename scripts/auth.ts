@@ -1,14 +1,13 @@
 /**
  * One-off local OAuth helper (`npm run auth`). Run once per principal:
  *
- *   GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... npm run auth -- school
- *   npm run auth -- walle
+ *   GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=... npm run auth -- walle
  *   npm run auth -- dan
  *   npm run auth -- alina
  *
  * Opens a consent URL for that principal's scopes, catches the redirect on
  * localhost:8765, and prints the refresh token to paste into env
- * (GOOGLE_REFRESH_SCHOOL / _WALLE / _DAN / _ALINA). Tokens never enter the repo.
+ * (GOOGLE_REFRESH_WALLE / _DAN / _ALINA). Tokens never enter the repo.
  */
 import http from 'node:http';
 import { google } from 'googleapis';

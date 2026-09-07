@@ -19,7 +19,7 @@ import { LedgerReader } from './ledger/read.js';
 import { createLedgerRouter } from './ledger/route.js';
 import { createGoogleAuths } from './google/auth.js';
 import { GoogleCalendarService } from './google/calendar.js';
-import { GmailForwardInbox, GmailSchoolInbox } from './google/gmail.js';
+import { GmailForwardInbox } from './google/gmail.js';
 import { GoogleDriveService } from './google/drive.js';
 import { Confirmations } from './assistant/confirmations.js';
 import { Conversation } from './assistant/conversation.js';
@@ -64,19 +64,17 @@ const llm = new OpenAiCompatClient(
 const memory = new MemoryStore(config.dataDir);
 const ledger = new LedgerReader(config.dataDir);
 
-// google, four principals
+// google, three principals
 const auths = createGoogleAuths({
   clientId: env.GOOGLE_CLIENT_ID,
   clientSecret: env.GOOGLE_CLIENT_SECRET,
   refreshTokens: {
     dan: env.GOOGLE_REFRESH_DAN,
     alina: env.GOOGLE_REFRESH_ALINA,
-    school: env.GOOGLE_REFRESH_SCHOOL,
     walle: env.GOOGLE_REFRESH_WALLE,
   },
 });
 const calendar = new GoogleCalendarService(auths);
-const schoolInbox = new GmailSchoolInbox(auths);
 const forwardInbox = new GmailForwardInbox(auths);
 const drive = new GoogleDriveService(auths, env.FAMILY_DRIVE_FOLDER_ID);
 
@@ -88,10 +86,11 @@ const confirmations = new Confirmations(
   outbound,
   calendar,
   systemClock,
-  // approving a stranger's mail: read it in full and treat it as a forward
+  // approving a stranger's mail: read it in full and route it like any
+  // other accepted mail (school pipeline or the approver's chat)
   async (user, _address, msgId) => {
     const email = await forwardInbox.fetchOne(msgId);
-    if (email) await conversation.handleForwardedEmail(user, email);
+    if (email) await forwarded.dispatch(user, email);
   },
 );
 const conversation = new Conversation({
@@ -117,7 +116,7 @@ const ingress = new Ingress(
 );
 const briefs = new Briefs({ log, repos, llm, outbound, ledger, calendar });
 const weekly = new WeeklyRollup({ log, repos, llm, outbound, memory });
-const school = new SchoolPipeline({ log, repos, llm, inbox: schoolInbox, confirmations });
+const school = new SchoolPipeline({ log, repos, llm, confirmations });
 forwarded = new ForwardedPipeline({
   log,
   repos,
@@ -125,10 +124,12 @@ forwarded = new ForwardedPipeline({
   confirmations,
   emailDan: env.EMAIL_DAN,
   emailAlina: env.EMAIL_ALINA,
+  schoolKeywords: config.schoolKeywords,
+  school: (email) => school.processEmail(email),
   handler: (user, email) => conversation.handleForwardedEmail(user, email),
 });
 const curator = new Curator({ log, llm, memory, logDir: path.join(config.dataDir, 'log') });
-const prober = new Prober(log, outbound, sender, calendar, schoolInbox);
+const prober = new Prober(log, outbound, sender, calendar, forwardInbox);
 const backup = new Backup(log, db, drive, config.dataDir);
 
 // http
@@ -196,21 +197,19 @@ registerJobs(log, [
     },
   },
   {
-    name: 'School inbox (day)',
+    name: 'Mail poll (day)',
     schedule: '*/15 6-19 * * *',
     run: async () => {
-      const probe = await prober.probe('Mail poll', ['school']);
-      if (!probe.failed.includes('school')) await school.poll();
-      await forwarded.poll();
+      const probe = await prober.probe('Mail poll', ['mail']);
+      if (!probe.failed.includes('mail')) await forwarded.poll();
     },
   },
   {
-    name: 'School inbox (night)',
+    name: 'Mail poll (night)',
     schedule: '0 0-5,20-23 * * *',
     run: async () => {
-      const probe = await prober.probe('Mail poll', ['school']);
-      if (!probe.failed.includes('school')) await school.poll();
-      await forwarded.poll();
+      const probe = await prober.probe('Mail poll', ['mail']);
+      if (!probe.failed.includes('mail')) await forwarded.poll();
     },
   },
   {

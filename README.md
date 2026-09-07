@@ -32,10 +32,10 @@ src/
   llm/       OpenAI-compatible client, tool loop, structured JSON calls, untrusted fence
   memory/    markdown memory files, deterministic routing phrases, nightly curator
   assistant/ per-user context, tools, conversation loop, Tier 2 confirmations
-  school/    inbox poll, classify, extract, propose, deadline chasing
+  school/    classify, extract, propose, deadline chasing (fed by forwarded/)
   briefs/    morning, evening, midday-conditional, Sunday rollup
   modelwatch/ weekly model-improvement suggestions from call telemetry
-  google/    four OAuth principals; gmail, calendar, drive
+  google/    three OAuth principals; gmail, calendar, drive
   forwarded/ the dedicated forwarding inbox and its sender allow-list
   ledger/    POST /ledger endpoint + read-only summary reader
   scheduler/ node-cron registry (Asia/Riyadh) with probe-first jobs
@@ -74,7 +74,7 @@ No send scope. No delete scope. Personal inboxes are never read — anything Wal
 | `WALLE_MODEL_ESCALATED` | optional stronger model for drafting; defaults to `WALLE_MODEL` |
 | `GROQ_API_KEY` | Whisper transcription (`whisper-large-v3-turbo`) |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | the OAuth client |
-| `GOOGLE_REFRESH_DAN`, `GOOGLE_REFRESH_ALINA`, `GOOGLE_REFRESH_SCHOOL`, `GOOGLE_REFRESH_WALLE` | from `npm run auth` |
+| `GOOGLE_REFRESH_DAN`, `GOOGLE_REFRESH_ALINA`, `GOOGLE_REFRESH_WALLE` | from `npm run auth` |
 | `FAMILY_DRIVE_FOLDER_ID` | the one Drive folder Wall-E may read, shared with the Wall-E account; backups go to its `_walle-backup/` subfolder |
 | `EMAIL_DAN`, `EMAIL_ALINA` | the only two addresses the forwarding inbox accepts mail from |
 | `LEDGER_PUSH_TOKEN` | bearer token the Mac finance pipeline uses on `POST /ledger` (16+ chars) |
@@ -103,7 +103,7 @@ npm run typecheck
 npm run dev:sim          # console simulator: "dan: pick up Dylan at 3", /morning dan, ...
 npm run rebuild-db       # replay the JSONL log into a fresh SQLite db
 npm run adoption-report  # day-28 metric: distinct unprompted inbound days per user
-npm run auth -- school   # Google OAuth helper (also: -- walle, -- dan, -- alina)
+npm run auth -- walle    # Google OAuth helper (also: -- dan, -- alina)
 ```
 
 ## Boring choices made where the PRD was silent

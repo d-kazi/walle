@@ -13,6 +13,7 @@ import { Outbound } from '../src/send/outbound.js';
 import { Confirmations } from '../src/assistant/confirmations.js';
 import { Conversation } from '../src/assistant/conversation.js';
 import { ForwardedPipeline } from '../src/forwarded/poller.js';
+import { SchoolPipeline } from '../src/school/pipeline.js';
 import type { WalleEvent } from '../src/types/events.js';
 import { FakeClock } from './helpers.js';
 import {
@@ -21,7 +22,6 @@ import {
   FakeForwardInbox,
   FakeLlm,
   FakeMedia,
-  FakeSchoolInbox,
   FakeSender,
   FakeTranscriber,
 } from './fakes.js';
@@ -30,6 +30,7 @@ export const WA_DAN = '966500000001';
 export const WA_ALINA = '966500000002';
 export const EMAIL_DAN = 'dan@example.com';
 export const EMAIL_ALINA = 'alina@example.com';
+export const SCHOOL_KEYWORDS = ['bisr'];
 
 /** Full offline service stack used across behaviour tests. */
 export function makeFullStack(dir: string, clock: FakeClock) {
@@ -45,11 +46,10 @@ export function makeFullStack(dir: string, clock: FakeClock) {
   const memory = new MemoryStore(dir);
   const ledger = new LedgerReader(dir, clock);
   const calendar = new FakeCalendar();
-  const school = new FakeSchoolInbox();
   const forwardInbox = new FakeForwardInbox();
   const drive = new FakeDrive();
   const llm = new FakeLlm();
-  let conversationRef: Conversation;
+  let forwardedRef: ForwardedPipeline;
   const confirmations = new Confirmations(
     log,
     repos,
@@ -58,7 +58,7 @@ export function makeFullStack(dir: string, clock: FakeClock) {
     clock,
     async (user, _address, msgId) => {
       const email = await forwardInbox.fetchOne(msgId);
-      if (email) await conversationRef.handleForwardedEmail(user, email);
+      if (email) await forwardedRef.dispatch(user, email);
     },
   );
   const conversation = new Conversation({
@@ -72,7 +72,7 @@ export function makeFullStack(dir: string, clock: FakeClock) {
     confirmations,
     clock,
   });
-  conversationRef = conversation;
+  const school = new SchoolPipeline({ log, repos, llm, confirmations });
   const forwarded = new ForwardedPipeline({
     log,
     repos,
@@ -80,9 +80,12 @@ export function makeFullStack(dir: string, clock: FakeClock) {
     confirmations,
     emailDan: EMAIL_DAN,
     emailAlina: EMAIL_ALINA,
+    schoolKeywords: SCHOOL_KEYWORDS,
+    school: (email) => school.processEmail(email),
     handler: (user, email) => conversation.handleForwardedEmail(user, email),
     clock,
   });
+  forwardedRef = forwarded;
   const ingress = new Ingress(
     log,
     repos,
