@@ -306,8 +306,8 @@ Both are prompt edits, then redeploy. Neither needs code.
 | --- | --- |
 | 02:00 | Backup to Drive, newest 14 kept |
 | 06:30 | Morning brief, both of you |
-| every 15 min, 06:00–19:45 | School and forwarding inboxes polled |
-| hourly, 20:00–05:00 | Same two inboxes, overnight cadence |
+| every 15 min, 06:00–19:45 | Wall·E inbox polled: school mail and forwards |
+| hourly, 20:00–05:00 | Same inbox, overnight cadence |
 | 11:00, 11:30, 12:00, 12:30, 13:00, 13:30, 14:00 | Midday check — silent unless something is urgent, max one message each per day |
 | 21:00 | Evening brief plus the child-time question |
 | 23:30 | Memory curation |
