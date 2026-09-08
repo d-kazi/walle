@@ -5,7 +5,7 @@
   "description": "WALL\u00b7E \u2014 family chief of staff on WhatsApp",
   "type": "module",
   "engines": {
-    "node": ">=22"
+    "node": "22.x"
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
