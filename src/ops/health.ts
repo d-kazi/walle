@@ -59,10 +59,25 @@ export function createHealthRouter(opts: {
     const ledger = opts.ledger.read();
 
     const lastBackup = latestBackupTs(opts.repos);
+    const dayAgo = new Date(Date.now() - 24 * 3_600_000).toISOString();
     const recentErrors = opts.repos
-      .eventsSince(new Date(Date.now() - 24 * 3_600_000).toISOString(), ['error'])
+      .eventsSince(dayAgo, ['error'])
       .slice(-5)
       .map((e) => ({ ts: e.ts, kind: (e.payload as { kind?: string }).kind ?? 'unknown' }));
+
+    // webhook traffic in the last 24h: did Meta deliver anything, and from whom
+    const webhooks = opts.repos
+      .eventsSince(dayAgo, ['trigger'])
+      .filter((e) => (e.payload as { kind?: string }).kind === 'webhook_in');
+    const unknownSenders = opts.repos
+      .eventsSince(dayAgo, ['msg_in'])
+      .map((e) => (e.payload as { unknownWaId?: string }).unknownWaId)
+      .filter((id): id is string => typeof id === 'string');
+    const inbound = {
+      webhooksLast24h: webhooks.length,
+      lastWebhookAt: webhooks.at(-1)?.ts ?? null,
+      lastUnknownSender: unknownSenders.at(-1) ?? null,
+    };
 
     res.json({
       ok: logWritable && dbOk,
@@ -75,6 +90,7 @@ export function createHealthRouter(opts: {
       ledger: { present: ledger.summary !== null, fresh: ledger.fresh, staleHours: ledger.staleHours },
       lastBackup,
       recentErrors,
+      inbound,
     });
   });
   return router;
