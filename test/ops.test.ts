@@ -85,6 +85,27 @@ describe('POST /ledger and GET /health', () => {
     expect(body.dbOk).toBe(true);
     expect((body.template as { status: string }).status).toBe('APPROVED');
     expect(body.windows).toEqual({ dan: null, alina: null });
+    expect(body.inbound).toEqual({ webhooksLast24h: 0, lastWebhookAt: null, lastUnknownSender: null });
+
+    // a webhook from a number that is not Dan or Alina shows up as traffic, not as a window
+    clock.set(new Date()); // /health measures its 24h window against wall-clock time
+    stack.log.append({
+      actor: 'system',
+      chat: null,
+      type: 'trigger',
+      payload: { kind: 'webhook_in', raw: {} },
+    });
+    stack.log.append({
+      actor: 'system',
+      chat: null,
+      type: 'msg_in',
+      payload: { kind: 'text', unknownWaId: '966599999999' },
+    });
+    const again = (await (await fetch(`${base}/health`)).json()) as Record<string, unknown>;
+    const inbound = again.inbound as { webhooksLast24h: number; lastUnknownSender: string | null };
+    expect(inbound.webhooksLast24h).toBe(1);
+    expect(inbound.lastUnknownSender).toBe('966599999999');
+    expect(again.windows).toEqual({ dan: null, alina: null });
     server.close();
   });
 });

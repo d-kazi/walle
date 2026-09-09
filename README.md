@@ -11,7 +11,7 @@ Built to the Execution PRD v5. One amendment agreed after the PRD: the model lay
 1. Never send to anyone except the two allow-listed users. Enforced in one choke point (`src/send/outbound.ts`); no other code path reaches the channel.
 2. Tier system. Tier 1 runs unattended (log, memory, briefs, drafts, reads). Tier 2 (calendar writes) requires an in-chat Yes on a proposal. Tier 3 (money, credentials, anything irreversible, anything child-facing, autonomous email) is not implemented anywhere.
 3. Secrets live in env and clients only. A leak guard refuses any model request whose body contains a configured secret.
-4. Read-only scopes everywhere they exist. The school principal is `gmail.readonly`; the ledger is a read-only file.
+4. Read-only scopes everywhere they exist, and the narrowest that works. The two personal Google accounts grant calendar and nothing else. Full mail reading happens only in two dedicated mailboxes. No send scope and no delete scope anywhere.
 5. Log first. Every inbound webhook payload is appended to the JSONL log before signature checks or any processing, including failures.
 6. One writer. Only this service writes the log.
 7. Privacy split in code, not prompts. The context builder for one user cannot open the other's private file.
@@ -32,28 +32,31 @@ src/
   llm/       OpenAI-compatible client, tool loop, structured JSON calls, untrusted fence
   memory/    markdown memory files, deterministic routing phrases, nightly curator
   assistant/ per-user context, tools, conversation loop, Tier 2 confirmations
-  school/    inbox poll, classify, extract, propose, deadline chasing
+  school/    classify, extract, propose, deadline chasing (fed by forwarded/)
   briefs/    morning, evening, midday-conditional, Sunday rollup
   modelwatch/ weekly model-improvement suggestions from call telemetry
   google/    three OAuth principals; gmail, calendar, drive
+  forwarded/ the dedicated forwarding inbox and its sender allow-list
   ledger/    POST /ledger endpoint + read-only summary reader
   scheduler/ node-cron registry (Asia/Riyadh) with probe-first jobs
   ops/       /health, nightly Drive backup
   dev/       console simulator (npm run dev:sim)
 ```
 
-## P0 — Dan's prerequisites (blocking, in order)
+## Setting it up
 
-1. Spare SIM active in a phone that can receive the WhatsApp registration SMS.
-2. Meta developer app + WhatsApp Business Account; register the number; note the phone number id and WABA id.
-3. Deploy this service to Railway (below) so the webhook URL exists; set the webhook to `https://<app>/webhook` with your `META_WA_VERIFY_TOKEN`; subscribe to `messages`.
-4. Submit the `daily_brief` utility template (one body variable `{{1}}`, language `en`). Its approval status shows in `/health` once `META_WABA_ID` is set.
-5. Create the school Gmail (e.g. kaziyev.school@gmail.com) and set BISR mail to redirect/forward into it.
-6. Create a `walle` label in your and Alina's personal Gmail.
-7. Google Cloud project with OAuth consent + a Desktop OAuth client; run `npm run auth -- school`, `-- dan`, `-- alina` locally and paste the three refresh tokens into Railway env.
-8. Confirm Alina's WhatsApp number (`WA_ID_ALINA`).
-9. Family Drive folder id (`FAMILY_DRIVE_FOLDER_ID`).
-10. An OpenRouter (or DeepInfra) key with a few dollars of credit; a Groq key for voice notes.
+**[docs/SETUP.md](docs/SETUP.md) is the step-by-step manual.** It covers the whole path from a local dry run to a live service, in the order the dependencies actually demand, with the failure modes inline.
+
+## Access model
+
+| Account | Scopes | Why |
+| --- | --- | --- |
+| School Gmail (dedicated) | `gmail.readonly` | receives only BISR mail |
+| Wall·E Gmail (dedicated) | `gmail.readonly`, `drive.readonly`, `drive.file` | the forwarding inbox; also holds the shared family Drive folder, so the broad Drive read covers an otherwise empty Drive |
+| Dan's Google | `calendar.events` | reads for briefs, writes behind the Tier 2 gate |
+| Alina's Google | `calendar.events` | same |
+
+No send scope. No delete scope. Personal inboxes are never read — anything Wall·E should see is forwarded to its own address, where a Gmail filter bins mail from anyone else and Wall·E asks, sender and subject only, before opening what is left.
 
 ## Environment variables
 
@@ -71,8 +74,9 @@ src/
 | `WALLE_MODEL_ESCALATED` | optional stronger model for drafting; defaults to `WALLE_MODEL` |
 | `GROQ_API_KEY` | Whisper transcription (`whisper-large-v3-turbo`) |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | the OAuth client |
-| `GOOGLE_REFRESH_DAN`, `GOOGLE_REFRESH_ALINA`, `GOOGLE_REFRESH_SCHOOL` | from `npm run auth` |
-| `FAMILY_DRIVE_FOLDER_ID` | the one Drive folder Wall-E may read; backups go to its `_walle-backup/` subfolder |
+| `GOOGLE_REFRESH_DAN`, `GOOGLE_REFRESH_ALINA`, `GOOGLE_REFRESH_WALLE` | from `npm run auth` |
+| `FAMILY_DRIVE_FOLDER_ID` | the one Drive folder Wall-E may read, shared with the Wall-E account; backups go to its `_walle-backup/` subfolder |
+| `EMAIL_DAN`, `EMAIL_ALINA` | the only two addresses the forwarding inbox accepts mail from |
 | `LEDGER_PUSH_TOKEN` | bearer token the Mac finance pipeline uses on `POST /ledger` (16+ chars) |
 | `TZ` | `Asia/Riyadh` |
 | `PORT`, `DATA_DIR` | default `3000`, `/data` |
@@ -86,6 +90,7 @@ One service, one attached volume mounted at `/data`. Build `npm ci && npm run bu
 - 06:30 and 21:00: morning and evening briefs, per user, ≤900 characters.
 - 11:00–14:00: midday check every 30 minutes; messages only on a trigger, hard cap one per user per day; a quiet day is silence.
 - School inbox: polled every 15 minutes 06:00–20:00, hourly overnight. Action or date emails become Yes/No/Change proposals to both parents; Yes writes the calendar event or opens a chased item (nudges at T-3d, T-1d, morning of).
+- Forwarding inbox: polled on the same schedule. Mail from Dan or Alina is read in full and answered in that person's chat. Mail from anyone else is binned by a Gmail filter and surfaced to Dan as sender and subject only, with a Tier 2 proposal before anything is read.
 - 23:30: memory curation (add / update / supersede) over the day's chat, one run per user so private facts can only land in that user's file.
 - Sunday 20:00: weekly rollup. Dan's copy also carries adherence decay (reply rate under 70% over 14 days → the single suggestion "shorten the prompts") and the model-watch block: automated suggestions from the week's LLM telemetry (schema failure rates, retries, latency, spend). Suggestions are advisory; changing models is always a manual env change.
 - 02:00: backup to Drive `_walle-backup/`, newest 14 kept.
@@ -93,16 +98,17 @@ One service, one attached volume mounted at `/data`. Build `npm ci && npm run bu
 ## Commands
 
 ```
-npm test                 # offline suite: 62 tests, no network, no keys
+npm test                 # offline suite: 72 tests, no network, no keys
 npm run typecheck
 npm run dev:sim          # console simulator: "dan: pick up Dylan at 3", /morning dan, ...
 npm run rebuild-db       # replay the JSONL log into a fresh SQLite db
 npm run adoption-report  # day-28 metric: distinct unprompted inbound days per user
-npm run auth -- school   # Google OAuth helper (also: -- dan, -- alina)
+npm run auth -- walle    # Google OAuth helper (also: -- dan, -- alina)
 ```
 
 ## Boring choices made where the PRD was silent
 
+- Wall·E cannot delete mail: that needs a Gmail write scope, and permanent deletion is Tier 3. Refusing unwanted mail is a Gmail filter's job, with a 30-day Trash window as the undo.
 - Confirmation correlation: button ids encode `p:{proposalId}:{yes|no|change}`; a plain-text "yes" binds to that user's single most recent pending proposal and asks when several are pending. Proposals expire after 72 hours and are resurfaced once in the next morning brief.
 - School proposals go to both parents; the first answer wins and the second tap is told who sorted it.
 - "Unprompted" in the adoption metric: an inbound not sent within 2 hours after a scheduled Wall-E send.

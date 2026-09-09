@@ -5,12 +5,11 @@ import { z } from 'zod';
 import type { EventLog } from '../log/eventLog.js';
 import type { Repos } from '../db/repos.js';
 import type { LlmClient } from '../llm/client.js';
-import type { SchoolEmail, SchoolInbox } from '../google/types.js';
+import type { SchoolEmail } from '../google/types.js';
 import type { Confirmations } from '../assistant/confirmations.js';
 import { structuredCall } from '../llm/structured.js';
 import { fenceUntrusted } from '../llm/untrusted.js';
 import type { EmailClass } from '../types/domain.js';
-import { type Clock, riyadhIso, systemClock } from '../util/time.js';
 
 const promptsDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'prompts');
 
@@ -30,12 +29,13 @@ const extractSchema = z.object({
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
- * School inbox loop (PRD §6): poll → log email_in → classify → extract →
- * propose to both parents with Yes/No/Change → on Yes the confirmation gate
- * executes (calendar event and/or chased open item). The school principal's
- * only scope is gmail.readonly; this pipeline cannot send email by
- * construction, and email content is fenced as untrusted everywhere it
- * meets the model.
+ * School mail loop (PRD §6): log email_in → classify → extract → propose to
+ * both parents with Yes/No/Change → on Yes the confirmation gate executes
+ * (calendar event and/or chased open item). Mail reaches it from the one
+ * dedicated mailbox via ForwardedPipeline, which recognises school mail by
+ * keyword. The mailbox's only Gmail scope is gmail.readonly; this pipeline
+ * cannot send email by construction, and email content is fenced as
+ * untrusted everywhere it meets the model.
  */
 export class SchoolPipeline {
   constructor(
@@ -43,45 +43,9 @@ export class SchoolPipeline {
       log: EventLog;
       repos: Repos;
       llm: LlmClient;
-      inbox: SchoolInbox;
       confirmations: Confirmations;
-      clock?: Clock;
     },
   ) {}
-
-  private get clock(): Clock {
-    return this.deps.clock ?? systemClock;
-  }
-
-  async poll(): Promise<void> {
-    const d = this.deps;
-    const since = riyadhIso(new Date(this.clock.now().getTime() - 3 * 86_400_000));
-    let emails: SchoolEmail[];
-    try {
-      emails = await d.inbox.listNewEmails(since);
-    } catch (err) {
-      d.log.append({
-        actor: 'system',
-        chat: null,
-        type: 'error',
-        payload: { kind: 'school_poll_failed', message: String(err) },
-      });
-      return;
-    }
-    for (const email of emails) {
-      if (d.repos.hasEmail(email.msgId)) continue;
-      try {
-        await this.processEmail(email);
-      } catch (err) {
-        d.log.append({
-          actor: 'system',
-          chat: null,
-          type: 'error',
-          payload: { kind: 'school_email_failed', msgId: email.msgId, message: String(err) },
-        });
-      }
-    }
-  }
 
   async processEmail(email: SchoolEmail): Promise<void> {
     const d = this.deps;

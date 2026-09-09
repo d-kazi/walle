@@ -1,14 +1,18 @@
 import { google } from 'googleapis';
 import type { GoogleAuths } from './auth.js';
-import type { PersonalEmailMeta, PersonalInbox, SchoolEmail, SchoolInbox } from './types.js';
-import type { User } from '../types/domain.js';
+import type { ForwardInbox, SchoolEmail } from './types.js';
 
-/** School inbox: full read of the dedicated Gmail, nothing else. */
-export class GmailSchoolInbox implements SchoolInbox {
+/**
+ * The one dedicated mailbox, read via the `walle` principal. Delivered mail
+ * is read in full; mail the Gmail filter binned is listed from TRASH with
+ * metadata only, so a stranger's body is never fetched before a user
+ * approves the sender.
+ */
+export class GmailForwardInbox implements ForwardInbox {
   constructor(private readonly auths: GoogleAuths) {}
 
   private gmail() {
-    return google.gmail({ version: 'v1', auth: this.auths.clientFor('school') });
+    return google.gmail({ version: 'v1', auth: this.auths.clientFor('walle') });
   }
 
   async listNewEmails(sinceIso: string): Promise<SchoolEmail[]> {
@@ -17,54 +21,31 @@ export class GmailSchoolInbox implements SchoolInbox {
     const list = await gmail.users.messages.list({
       userId: 'me',
       q: `after:${afterEpoch}`,
+      labelIds: ['INBOX'],
       maxResults: 25,
     });
     const out: SchoolEmail[] = [];
     for (const ref of list.data.messages ?? []) {
       if (!ref.id) continue;
-      const msg = await gmail.users.messages.get({ userId: 'me', id: ref.id, format: 'full' });
-      const headers = msg.data.payload?.headers ?? [];
-      const header = (name: string) =>
-        headers.find((h) => h.name?.toLowerCase() === name)?.value ?? '';
-      out.push({
-        msgId: ref.id,
-        from: header('from'),
-        subject: header('subject'),
-        date: new Date(Number(msg.data.internalDate ?? Date.now())).toISOString(),
-        body: extractPlainText(msg.data.payload).slice(0, 20000),
-      });
+      const email = await this.fetchOne(ref.id);
+      if (email) out.push(email);
     }
     return out.sort((a, b) => a.date.localeCompare(b.date));
   }
 
-  async probe(): Promise<boolean> {
-    try {
-      await this.gmail().users.getProfile({ userId: 'me' });
-      return true;
-    } catch {
-      return false;
-    }
-  }
-}
-
-/** Personal inboxes: metadata triage + full read of the single 'walle' label. */
-export class GmailPersonalInbox implements PersonalInbox {
-  constructor(private readonly auths: GoogleAuths) {}
-
-  private gmail(user: User) {
-    return google.gmail({ version: 'v1', auth: this.auths.clientFor(user) });
-  }
-
-  async unreadSummary(user: User): Promise<{ count: number; recent: PersonalEmailMeta[] }> {
-    const gmail = this.gmail(user);
+  async listRefused(sinceIso: string): Promise<Array<Omit<SchoolEmail, 'body'>>> {
+    const gmail = this.gmail();
+    const afterEpoch = Math.floor(new Date(sinceIso).getTime() / 1000);
     const list = await gmail.users.messages.list({
       userId: 'me',
-      q: 'is:unread in:inbox',
-      maxResults: 10,
+      q: `after:${afterEpoch}`,
+      labelIds: ['TRASH'],
+      maxResults: 25,
     });
-    const recent: PersonalEmailMeta[] = [];
-    for (const ref of (list.data.messages ?? []).slice(0, 10)) {
+    const out: Array<Omit<SchoolEmail, 'body'>> = [];
+    for (const ref of list.data.messages ?? []) {
       if (!ref.id) continue;
+      // metadata format only: the body of a stranger's mail is never fetched
       const msg = await gmail.users.messages.get({
         userId: 'me',
         id: ref.id,
@@ -74,37 +55,42 @@ export class GmailPersonalInbox implements PersonalInbox {
       const headers = msg.data.payload?.headers ?? [];
       const header = (name: string) =>
         headers.find((h) => h.name?.toLowerCase() === name)?.value ?? '';
-      recent.push({ from: header('from'), subject: header('subject'), unread: true });
-    }
-    return { count: list.data.resultSizeEstimate ?? recent.length, recent };
-  }
-
-  async readWalleLabel(user: User): Promise<SchoolEmail[]> {
-    const gmail = this.gmail(user);
-    const labels = await gmail.users.labels.list({ userId: 'me' });
-    const walleLabel = labels.data.labels?.find((l) => l.name?.toLowerCase() === 'walle');
-    if (!walleLabel?.id) return [];
-    const list = await gmail.users.messages.list({
-      userId: 'me',
-      labelIds: [walleLabel.id],
-      maxResults: 10,
-    });
-    const out: SchoolEmail[] = [];
-    for (const ref of list.data.messages ?? []) {
-      if (!ref.id) continue;
-      const msg = await gmail.users.messages.get({ userId: 'me', id: ref.id, format: 'full' });
-      const headers = msg.data.payload?.headers ?? [];
-      const header = (name: string) =>
-        headers.find((h) => h.name?.toLowerCase() === name)?.value ?? '';
       out.push({
         msgId: ref.id,
         from: header('from'),
         subject: header('subject'),
         date: new Date(Number(msg.data.internalDate ?? Date.now())).toISOString(),
-        body: extractPlainText(msg.data.payload).slice(0, 20000),
       });
     }
-    return out;
+    return out.sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  async fetchOne(msgId: string): Promise<SchoolEmail | null> {
+    const msg = await this.gmail().users.messages.get({
+      userId: 'me',
+      id: msgId,
+      format: 'full',
+    });
+    if (!msg.data.id) return null;
+    const headers = msg.data.payload?.headers ?? [];
+    const header = (name: string) =>
+      headers.find((h) => h.name?.toLowerCase() === name)?.value ?? '';
+    return {
+      msgId: msg.data.id,
+      from: header('from'),
+      subject: header('subject'),
+      date: new Date(Number(msg.data.internalDate ?? Date.now())).toISOString(),
+      body: extractPlainText(msg.data.payload).slice(0, 20000),
+    };
+  }
+
+  async probe(): Promise<boolean> {
+    try {
+      await this.gmail().users.getProfile({ userId: 'me' });
+      return true;
+    } catch {
+      return false;
+    }
   }
 }
 

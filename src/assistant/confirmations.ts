@@ -23,6 +23,12 @@ export class Confirmations {
     private readonly outbound: Outbound,
     private readonly calendar: CalendarService,
     private readonly clock: Clock = systemClock,
+    /** approving mail from an unexpected sender: read it and act on it */
+    private readonly onForwardedApproved?: (
+      user: User,
+      address: string,
+      msgId: string,
+    ) => Promise<void>,
   ) {}
 
   async propose(
@@ -116,6 +122,19 @@ export class Confirmations {
     });
 
     if (answer === 'no') {
+      if (proposal.kind === 'forwarded_email') {
+        const address = String((proposal.payload as { address?: string }).address ?? '').toLowerCase();
+        this.log.append({
+          actor: user,
+          chat: user,
+          type: 'verdict',
+          payload: { kind: 'email_sender', address, value: 'declined' },
+        });
+        await this.outbound.send(user, {
+          text: `Left alone. Gmail bins it on its own; I won't ask about ${address} again.`,
+        });
+        return;
+      }
       await this.outbound.send(user, { text: 'Dropped, then.' });
       return;
     }
@@ -128,6 +147,36 @@ export class Confirmations {
   }
 
   private async execute(user: User, proposal: Proposal): Promise<void> {
+    if (proposal.kind === 'forwarded_email') {
+      const p = proposal.payload as { address?: string; msgId?: string };
+      const address = String(p.address ?? '').toLowerCase();
+      // record the decision first, so a failure downstream does not re-ask
+      this.log.append({
+        actor: user,
+        chat: user,
+        type: 'verdict',
+        payload: { kind: 'email_sender', address, value: 'allowed' },
+      });
+      if (this.onForwardedApproved && p.msgId) {
+        try {
+          await this.onForwardedApproved(user, address, p.msgId);
+          return;
+        } catch (err) {
+          this.log.append({
+            actor: 'system',
+            chat: user,
+            type: 'error',
+            payload: { kind: 'forward_approve_failed', msgId: p.msgId, message: String(err) },
+          });
+          await this.outbound.send(user, {
+            text: `I couldn't open that one after all. It's still in the bin at the Wall-E address if you want to look yourself.`,
+          });
+          return;
+        }
+      }
+      await this.outbound.send(user, { text: `Noted, ${address} is allowed from now on.` });
+      return;
+    }
     if (proposal.kind === 'calendar_event') {
       const draft = proposal.payload as unknown as CalendarEventDraft;
       try {
