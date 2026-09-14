@@ -18,6 +18,21 @@ export class Repos {
     );
   }
 
+  /** Text of a message we sent or received, by the channel's id; null if unknown. */
+  messageTextByWaId(waMsgId: string): { text: string; fromWalle: boolean } | null {
+    const row = this.db
+      .prepare(
+        `SELECT type, actor, payload FROM events
+         WHERE wa_msg_id = ? AND type IN ('msg_in', 'trigger') ORDER BY ts LIMIT 1`,
+      )
+      .get(waMsgId) as { type: string; actor: string; payload: string } | undefined;
+    if (!row) return null;
+    const payload = JSON.parse(row.payload) as { text?: string; kind?: string };
+    if (row.type === 'trigger' && payload.kind !== 'delivered') return null;
+    if (typeof payload.text !== 'string') return null;
+    return { text: payload.text, fromWalle: row.type === 'trigger' };
+  }
+
   // -- window --------------------------------------------------------------
 
   lastInboundTs(user: User): string | null {

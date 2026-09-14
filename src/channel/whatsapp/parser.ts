@@ -23,7 +23,7 @@ interface MetaMessage {
     list_reply?: { id: string; title: string };
   };
   button?: { payload?: string; text?: string };
-  context?: { forwarded?: boolean; frequently_forwarded?: boolean };
+  context?: { forwarded?: boolean; frequently_forwarded?: boolean; id?: string };
 }
 
 export function parseWebhookPayload(body: unknown): InboundMessage[] {
@@ -47,6 +47,7 @@ function parseMessage(msg: MetaMessage): InboundMessage | null {
     user: null,
     senderId: msg.from,
     forwarded: Boolean(msg.context?.forwarded || msg.context?.frequently_forwarded),
+    ...(msg.context?.id ? { quotedMsgId: msg.context.id } : {}),
     providerMsgId: msg.id,
     timestamp: parseInt(msg.timestamp, 10) || 0,
   } as const;

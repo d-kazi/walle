@@ -1,6 +1,6 @@
 /** Meta Cloud API webhook payload fixtures. */
 
-export function textPayload(from: string, msgId: string, body: string): object {
+export function textPayload(from: string, msgId: string, body: string, quotedMsgId?: string): object {
   return {
     object: 'whatsapp_business_account',
     entry: [
@@ -20,6 +20,7 @@ export function textPayload(from: string, msgId: string, body: string): object {
                   timestamp: '1756000000',
                   type: 'text',
                   text: { body },
+                  ...(quotedMsgId ? { context: { from, id: quotedMsgId } } : {}),
                 },
               ],
             },

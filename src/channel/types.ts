@@ -28,6 +28,8 @@ export interface InboundMessage {
   caption?: string;
   emoji?: string;
   forwarded: boolean;
+  /** channel id of the message this one quotes (WhatsApp "reply to") */
+  quotedMsgId?: string;
   providerMsgId: string;
   /** epoch seconds from the channel */
   timestamp: number;

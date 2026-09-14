@@ -85,6 +85,14 @@ export class Conversation {
     if (inbound.message.forwarded) {
       turnText = fenceUntrusted(text, 'forwarded-message');
     }
+    // a WhatsApp "reply to": show the model what is being replied to
+    if (inbound.message.quotedMsgId) {
+      const quoted = d.repos.messageTextByWaId(inbound.message.quotedMsgId);
+      if (quoted) {
+        const who = quoted.fromWalle ? 'your earlier message' : 'their own earlier message';
+        turnText = `[Replying to ${who}: "${quoted.text.slice(0, 600)}"]\n${turnText}`;
+      }
+    }
     if (changingProposal) {
       const proposal = d.repos.proposal(changingProposal);
       turnText =

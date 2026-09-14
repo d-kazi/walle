@@ -1,7 +1,7 @@
 import type { Repos } from '../db/repos.js';
 import type { AllowList } from '../identity/allowList.js';
 import type { EventLog } from '../log/eventLog.js';
-import type { ChannelSender, OutboundMessage, SendMode } from '../channel/types.js';
+import type { ChannelSender, OutboundMessage, SendMode, SendResult } from '../channel/types.js';
 import type { User } from '../types/domain.js';
 import { USERS } from '../types/domain.js';
 import { type Clock, systemClock } from '../util/time.js';
@@ -73,12 +73,23 @@ export class Outbound {
     });
 
     try {
+      let result: SendResult;
       if (mode === 'template') {
-        await this.sender.sendTemplate(to, this.templateName, text);
+        result = await this.sender.sendTemplate(to, this.templateName, text);
       } else if (message.buttons && message.buttons.length > 0) {
-        await this.sender.sendButtons(to, text, message.buttons);
+        result = await this.sender.sendButtons(to, text, message.buttons);
       } else {
-        await this.sender.sendText(to, text);
+        result = await this.sender.sendText(to, text);
+      }
+      // the channel's id for this message, so a later "reply to" can be resolved to its text
+      if (result.providerMsgId) {
+        this.log.append({
+          actor: 'walle',
+          chat: user,
+          type: 'trigger',
+          payload: { kind: 'delivered', text },
+          wa_msg_id: result.providerMsgId,
+        });
       }
     } catch (err) {
       this.log.append({

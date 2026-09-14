@@ -69,6 +69,35 @@ describe('assistant conversation', () => {
     expect(reply?.text).toContain('Tuesday');
   });
 
+  it('a WhatsApp "reply to" puts the quoted message in front of the model', async () => {
+    const stack = makeFullStack(dir, clock);
+    // Wall-E says something; the fake channel assigns it an id
+    await stack.outbound.send('dan', {
+      text: 'Midday. Both your calendars clash with swimming today.',
+    });
+    const quotedId = 'fake.1';
+
+    let seen = '';
+    stack.llm.on('assistant', (opts) => {
+      seen = String(opts.messages.at(-1)?.content ?? '');
+      return 'Understood, ignoring that clash.';
+    });
+    await stack.ingress.process(
+      parseWebhookPayload(textPayload(WA_DAN, 'wamid.q1', 'Can you clear those. Not accurate anymore', quotedId)),
+    );
+    expect(seen).toContain('Replying to your earlier message');
+    expect(seen).toContain('calendars clash with swimming');
+    expect(seen).toContain('Can you clear those');
+
+    // a quote of something we do not know is simply passed through
+    seen = '';
+    await stack.ingress.process(
+      parseWebhookPayload(textPayload(WA_DAN, 'wamid.q2', 'and this one', 'wamid.unknown')),
+    );
+    expect(seen).not.toContain('Replying to');
+    expect(seen).toContain('and this one');
+  });
+
   it('Tier 2: calendar events go proposal → buttons → Yes → write, never direct', async () => {
     const stack = makeFullStack(dir, clock);
     stack.llm.on(
