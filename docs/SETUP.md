@@ -174,7 +174,7 @@ Everything in the table below is required except `META_WABA_ID` and `WALLE_MODEL
 
 `PORT` is set by Railway; leave it alone.
 
-4. Deploy, then Settings → Networking → Generate Domain.
+4. Deploy, then Settings → Networking → Generate Domain. When it asks for a port, use **8080**: Railway hands the service that port at runtime, and the deploy log's last line says which (`walle listening on :8080`). A domain pointed at the wrong port shows "Application failed to respond" even though the log looks healthy.
 5. Check it:
 
 ```bash
@@ -189,7 +189,9 @@ Read the answer field by field:
 - `template.status` — see section 9. Cached for an hour, so it lags reality after approval.
 - `recentErrors` — the last five in 24 hours. Empty is what you want.
 
-If the deploy fails on `better-sqlite3`, check that `.node-version` reached the repo; that file is what keeps the build and the runtime on the same Node major.
+If the deploy fails on `better-sqlite3` with node-gyp and Python errors, the build picked a Node other than 22. `nixpacks.toml` in the repo pins it; if you have set `NIXPACKS_NODE_VERSION` or a custom build command in Railway, remove them so the repo files win.
+
+`/health` also carries an `inbound` block: how many webhooks Meta delivered in the last 24 hours, when the last one arrived, and the last sender the allow-list refused. It is the first thing to read when a message goes unanswered.
 
 ---
 
@@ -200,9 +202,21 @@ Back in the Meta app → WhatsApp → Configuration → Edit:
 - **Callback URL**: `https://your-app.up.railway.app/webhook`
 - **Verify token**: exactly the `META_WA_VERIFY_TOKEN` you invented
 - Verify and save. A 403 means the token does not match, character for character.
-- Then **Manage** → subscribe to **messages**. Miss this and the webhook verifies but nothing ever arrives.
+- Then **Manage** → toggle **messages** to Subscribed. Miss this and the webhook verifies but nothing ever arrives.
 
-Message it from your phone. `/health` should now show a timestamp under `windows.dan`.
+Two more steps that the page does not mention and without which nothing arrives either:
+
+- **Publish the app.** Left menu → **Publish** → **Publish**. An unpublished app only receives the dashboard's own test webhooks. Nothing is sent for review; it just switches real delivery on.
+- **Subscribe the WhatsApp account to the app.** In Terminal, with your permanent token:
+
+```bash
+curl -X POST "https://graph.facebook.com/v21.0/META_WABA_ID/subscribed_apps" \
+  -H "Authorization: Bearer META_WA_TOKEN"
+```
+
+You want `{"success":true}`. The dashboard sometimes does this for you and sometimes does not; the symptom when it has not is a verified, subscribed webhook that never fires.
+
+Message it from your phone. `/health` should now show `inbound.webhooksLast24h` above zero and a timestamp under `windows.dan`. If the count rises but the window stays null, `inbound.lastUnknownSender` is the number you wrote from; put it in `WA_ID_DAN`.
 
 ---
 
@@ -215,7 +229,7 @@ WhatsApp Manager → Message templates → Create:
 - **Name**: `daily_brief` (exactly, lowercase, underscore)
 - **Category**: Utility
 - **Language**: English (`en`)
-- **Body**: `{{1}}` and nothing else
+- **Body**: `From Wall-E: {{1}} Reply here to pick anything up.` Meta refuses a body that is only a variable, or one that starts or ends with it, so the fixed words are required. Keep it to that one variable.
 - **Sample**: paste a realistic brief, e.g. `Morning. Dylan needs his PE kit today, swimming so trunks and towel. The trip form is due Thursday. Alina added: plumber between 2 and 4.`
 
 Approval usually takes minutes to a few hours. `/health` reports `template.status`, which can read:
