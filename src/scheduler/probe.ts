@@ -1,9 +1,9 @@
 import type { ChannelSender } from '../channel/types.js';
-import type { CalendarService, SchoolInbox } from '../google/types.js';
+import type { CalendarService, ForwardInbox } from '../google/types.js';
 import type { EventLog } from '../log/eventLog.js';
 import type { Outbound } from '../send/outbound.js';
 
-export type ProbeNeed = 'whatsapp' | 'calendar' | 'school';
+export type ProbeNeed = 'whatsapp' | 'calendar' | 'mail';
 
 export interface ProbeResult {
   ok: boolean;
@@ -21,7 +21,7 @@ export class Prober {
     private readonly outbound: Outbound,
     private readonly sender: ChannelSender,
     private readonly calendar: CalendarService,
-    private readonly school: SchoolInbox,
+    private readonly mail: ForwardInbox,
   ) {}
 
   async probe(jobName: string, needs: ProbeNeed[]): Promise<ProbeResult> {
@@ -32,7 +32,7 @@ export class Prober {
         if (need === 'whatsapp') ok = await this.sender.probe();
         else if (need === 'calendar')
           ok = (await this.calendar.probe('dan')) && (await this.calendar.probe('alina'));
-        else if (need === 'school') ok = await this.school.probe();
+        else if (need === 'mail') ok = await this.mail.probe();
       } catch {
         ok = false;
       }

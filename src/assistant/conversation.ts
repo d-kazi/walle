@@ -3,7 +3,7 @@ import type { EventLog } from '../log/eventLog.js';
 import type { Repos } from '../db/repos.js';
 import type { MemoryStore } from '../memory/store.js';
 import type { LedgerReader } from '../ledger/read.js';
-import type { CalendarService, DriveService, PersonalInbox } from '../google/types.js';
+import type { CalendarService, DriveService, SchoolEmail } from '../google/types.js';
 import type { LlmClient } from '../llm/client.js';
 import type { Outbound } from '../send/outbound.js';
 import type { Confirmations } from './confirmations.js';
@@ -13,6 +13,7 @@ import { runToolLoop } from '../llm/toolLoop.js';
 import { explicitScope } from '../memory/router.js';
 import { fenceUntrusted } from '../llm/untrusted.js';
 import { parseChildTimeAnswer, recordChildTime } from '../childtime/capture.js';
+import type { User } from '../types/domain.js';
 import { type Clock, riyadhDate, systemClock } from '../util/time.js';
 
 /**
@@ -31,7 +32,6 @@ export class Conversation {
       ledger: LedgerReader;
       calendar: CalendarService;
       drive?: DriveService;
-      personalInbox?: PersonalInbox;
       llm: LlmClient;
       outbound: Outbound;
       confirmations: Confirmations;
@@ -109,7 +109,6 @@ export class Conversation {
       calendar: d.calendar,
       confirmations: d.confirmations,
       ...(d.drive ? { drive: d.drive } : {}),
-      ...(d.personalInbox ? { personalInbox: d.personalInbox } : {}),
       clock: this.clock,
       ctx: { user, forcedScope: forced?.scope ?? null },
     });
@@ -125,6 +124,59 @@ export class Conversation {
         payload: { kind: 'assistant_failed', message: String(err) },
       });
       reply = "Sorry, I hit a snag processing that. It's logged; try me again in a minute.";
+    }
+    if (reply.trim()) {
+      await d.outbound.send(user, { text: reply.trim() });
+    }
+  }
+
+  /**
+   * Mail forwarded to the dedicated Wall-E address by one of the two users.
+   * Same context, same tools, same Tier 2 gate as a chat turn — the only
+   * difference is that the content is fenced as untrusted and the turn is
+   * unprompted. Answered in the forwarder's chat and nowhere else.
+   */
+  async handleForwardedEmail(user: User, email: SchoolEmail): Promise<void> {
+    const d = this.deps;
+    const system = this.contextBuilder.buildSystem(user);
+    const fenced = fenceUntrusted(
+      `From: ${email.from}\nDate: ${email.date}\nSubject: ${email.subject}\n\n${email.body.slice(0, 8000)}`,
+      'forwarded-email',
+    );
+    const messages = [
+      ...this.contextBuilder.buildHistory(user, 10),
+      {
+        role: 'user' as const,
+        content:
+          `${capitalise(user)} forwarded this to your email address. Say what it is in a line or two, ` +
+          `then offer the useful next step: track it as an item, or propose a calendar event for them to confirm. ` +
+          `Do not invent detail that is not in the mail.\n\n${fenced}`,
+      },
+    ];
+
+    const tools = buildTools({
+      log: d.log,
+      repos: d.repos,
+      memory: d.memory,
+      ledger: d.ledger,
+      calendar: d.calendar,
+      confirmations: d.confirmations,
+      ...(d.drive ? { drive: d.drive } : {}),
+      clock: this.clock,
+      ctx: { user, forcedScope: null },
+    });
+
+    let reply: string;
+    try {
+      reply = await runToolLoop(d.llm, 'forwarded_email', system, messages, tools);
+    } catch (err) {
+      d.log.append({
+        actor: 'system',
+        chat: user,
+        type: 'error',
+        payload: { kind: 'forwarded_email_failed', msgId: email.msgId, message: String(err) },
+      });
+      reply = `Something arrived at my address from you, subject "${email.subject}", but I couldn't read it properly. It's logged.`;
     }
     if (reply.trim()) {
       await d.outbound.send(user, { text: reply.trim() });
@@ -150,4 +202,8 @@ export class Conversation {
       return false; // fall through to the assistant
     }
   }
+}
+
+function capitalise(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }

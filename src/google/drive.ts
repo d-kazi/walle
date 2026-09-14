@@ -6,8 +6,10 @@ import type { DriveFile, DriveService } from './types.js';
 const BACKUP_FOLDER_NAME = '_walle-backup';
 
 /**
- * Drive access via Dan's principal: read-only listing/fetch of the one
- * family folder, plus writes to its _walle-backup subfolder only.
+ * Drive access via the dedicated walle account, which the family folder is
+ * shared with. Its own Drive is otherwise empty, so drive.readonly covers
+ * that one folder in practice; drive.file limits writes to files this
+ * service created (the backup archives under _walle-backup).
  */
 export class GoogleDriveService implements DriveService {
   private backupFolderId: string | null = null;
@@ -18,7 +20,7 @@ export class GoogleDriveService implements DriveService {
   ) {}
 
   private drive() {
-    return google.drive({ version: 'v3', auth: this.auths.clientFor('dan') });
+    return google.drive({ version: 'v3', auth: this.auths.clientFor('walle') });
   }
 
   async listFamilyFolder(): Promise<DriveFile[]> {
