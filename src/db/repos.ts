@@ -33,6 +33,32 @@ export class Repos {
     return { text: payload.text, fromWalle: row.type === 'trigger' };
   }
 
+  /**
+   * Dependencies whose latest probe failed, with the time of the first
+   * failure in the current run of failures. Feeds the morning brief's one line.
+   */
+  outages(sinceIso: string): Array<{ need: string; since: string }> {
+    const probes = this.eventsSince(sinceIso, ['probe']) as Array<{
+      ts: string;
+      payload: { needs?: string[]; failed?: string[] };
+    }>;
+    const state = new Map<string, { failing: boolean; since: string }>();
+    for (const p of probes) {
+      for (const need of p.payload.needs ?? []) {
+        const failed = (p.payload.failed ?? []).includes(need);
+        const prev = state.get(need);
+        if (failed) {
+          state.set(need, { failing: true, since: prev?.failing ? prev.since : p.ts });
+        } else {
+          state.set(need, { failing: false, since: p.ts });
+        }
+      }
+    }
+    return [...state.entries()]
+      .filter(([, v]) => v.failing)
+      .map(([need, v]) => ({ need, since: v.since }));
+  }
+
   // -- window --------------------------------------------------------------
 
   lastInboundTs(user: User): string | null {

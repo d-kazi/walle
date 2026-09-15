@@ -129,7 +129,7 @@ forwarded = new ForwardedPipeline({
   handler: (user, email) => conversation.handleForwardedEmail(user, email),
 });
 const curator = new Curator({ log, llm, memory, logDir: path.join(config.dataDir, 'log') });
-const prober = new Prober(log, outbound, sender, calendar, forwardInbox);
+const prober = new Prober(log, sender, calendar, forwardInbox);
 const backup = new Backup(log, db, drive, config.dataDir);
 
 // http

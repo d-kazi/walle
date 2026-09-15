@@ -12,6 +12,13 @@ import { nudgesOwed } from '../school/chase.js';
 import { describeProposal } from '../assistant/confirmations.js';
 import { type Clock, riyadhDate, riyadhIso, systemClock } from '../util/time.js';
 
+/** how a failing dependency is named in Dan's brief */
+const OUTAGE_WORDS: Record<string, string> = {
+  mail: 'the Wall-E inbox',
+  calendar: 'the calendars',
+  whatsapp: 'WhatsApp',
+};
+
 const DAY_MS = 86_400_000;
 
 /**
@@ -105,6 +112,9 @@ export class Briefs {
       }
     }
 
+    const outages = d.repos.outages(riyadhIso(new Date(now.getTime() - DAY_MS)));
+    const systems = outages.map((o) => `${OUTAGE_WORDS[o.need] ?? o.need} unreachable since ${o.since.slice(0, 16).replace('T', ' ')}`);
+
     const text = await composeBrief(d.llm, d.log, {
       briefType: 'morning',
       user,
@@ -121,6 +131,7 @@ export class Briefs {
         ...(childTimeReminder ? { unansweredChildTimeFromYesterday: 'true' } : {}),
         ...(ledgerLine ? { spending: ledgerLine } : {}),
         ...(ledgerStale ? { ledgerStale: 'the spending sync has not run for a few days' } : {}),
+        ...(systems.length > 0 && user === 'dan' ? { systems } : {}),
       },
     });
 

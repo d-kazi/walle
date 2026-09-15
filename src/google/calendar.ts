@@ -49,7 +49,9 @@ export class GoogleCalendarService implements CalendarService {
 
   async probe(user: User): Promise<boolean> {
     try {
-      await this.calendar(user).calendarList.get({ calendarId: 'primary' });
+      // events.list is the call the briefs make and the one calendar.events permits;
+      // calendarList needs a wider scope and reported a false outage
+      await this.calendar(user).events.list({ calendarId: 'primary', maxResults: 1 });
       return true;
     } catch {
       return false;
