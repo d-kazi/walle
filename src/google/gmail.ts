@@ -1,6 +1,8 @@
 import { google } from 'googleapis';
 import type { GoogleAuths } from './auth.js';
 import type { ForwardInbox, SchoolEmail } from './types.js';
+import { probeReason } from '../channel/types.js';
+import type { ProbeOutcome } from '../channel/types.js';
 
 /**
  * The one dedicated mailbox, read via the `walle` principal. Delivered mail
@@ -84,12 +86,12 @@ export class GmailForwardInbox implements ForwardInbox {
     };
   }
 
-  async probe(): Promise<boolean> {
+  async probe(): Promise<ProbeOutcome> {
     try {
       await this.gmail().users.getProfile({ userId: 'me' });
-      return true;
-    } catch {
-      return false;
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, reason: probeReason(err) };
     }
   }
 }

@@ -79,6 +79,9 @@ export function createHealthRouter(opts: {
       lastUnknownSender: unknownSenders.at(-1) ?? null,
     };
 
+    // what is currently down and what Google or Meta actually said about it
+    const outages = opts.repos.outages(dayAgo);
+
     res.json({
       ok: logWritable && dbOk,
       uptimeSeconds: Math.round((Date.now() - opts.startedAt.getTime()) / 1000),
@@ -91,6 +94,7 @@ export function createHealthRouter(opts: {
       lastBackup,
       recentErrors,
       inbound,
+      outages,
     });
   });
   return router;

@@ -1,3 +1,4 @@
+import type { ProbeOutcome } from '../channel/types.js';
 import type { BusyInterval, CalendarEventDraft, User } from '../types/domain.js';
 
 /**
@@ -27,7 +28,7 @@ export interface CalendarService {
   listFamilyEvents(fromIso: string, toIso: string): Promise<CalendarEvent[]>;
   busy(user: User, fromIso: string, toIso: string): Promise<BusyInterval[]>;
   createEvent(draft: CalendarEventDraft): Promise<{ id: string }>;
-  probe(user: User): Promise<boolean>;
+  probe(user: User): Promise<ProbeOutcome>;
 }
 
 export interface SchoolEmail {
@@ -66,5 +67,5 @@ export interface ForwardInbox {
   listRefused(sinceIso: string): Promise<Array<Omit<SchoolEmail, 'body'>>>;
   /** full read of one message, used only after a user approves its sender */
   fetchOne(msgId: string): Promise<SchoolEmail | null>;
-  probe(): Promise<boolean>;
+  probe(): Promise<ProbeOutcome>;
 }

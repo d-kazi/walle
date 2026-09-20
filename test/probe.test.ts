@@ -27,7 +27,9 @@ describe('outages', () => {
     stack.forwardInbox.probeOk = false;
     for (let i = 0; i < 4; i++) {
       clock.advance(15 * 60_000);
-      expect((await prober.probe('Mail poll', ['mail'])).failed).toEqual(['mail']);
+      const r = await prober.probe('Mail poll', ['mail']);
+      expect(r.failed).toEqual(['mail']);
+      expect(r.reasons.mail).toBe('fake: unreachable');
     }
     // nothing sent, everything logged
     expect(stack.sender.sent).toHaveLength(0);
@@ -37,6 +39,8 @@ describe('outages', () => {
     const outages = stack.repos.outages('2026-08-24T00:00:00+03:00');
     expect(outages).toHaveLength(1);
     expect(outages[0]?.need).toBe('mail');
+    // the reason travels with the outage, so /health says what Google actually said
+    expect(outages[0]?.reason).toBe('fake: unreachable');
     expect(outages[0]?.since.slice(0, 16)).toBe('2026-08-24T05:15');
 
     // morning brief: Dan gets the line, Alina does not

@@ -1,4 +1,5 @@
-import type { ChannelSender, OutboundButton, SendResult } from '../types.js';
+import { probeReason } from '../types.js';
+import type { ChannelSender, OutboundButton, ProbeOutcome, SendResult } from '../types.js';
 import type { GraphClient } from './client.js';
 
 /**
@@ -75,12 +76,12 @@ export class WhatsAppSender implements ChannelSender {
     return { providerMsgId: this.extractMsgId(res), mode: 'template' };
   }
 
-  async probe(): Promise<boolean> {
+  async probe(): Promise<ProbeOutcome> {
     try {
       await this.graph.get(`/${this.phoneId}?fields=id`);
-      return true;
-    } catch {
-      return false;
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, reason: probeReason(err) };
     }
   }
 }

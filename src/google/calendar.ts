@@ -1,6 +1,8 @@
 import { google } from 'googleapis';
 import type { GoogleAuths } from './auth.js';
 import type { CalendarEvent, CalendarService } from './types.js';
+import { probeReason } from '../channel/types.js';
+import type { ProbeOutcome } from '../channel/types.js';
 import type { BusyInterval, CalendarEventDraft, User } from '../types/domain.js';
 
 /**
@@ -68,12 +70,12 @@ export class GoogleCalendarService implements CalendarService {
     return { id: res.data.id ?? '' };
   }
 
-  async probe(user: User): Promise<boolean> {
+  async probe(user: User): Promise<ProbeOutcome> {
     try {
       await this.calendar(user).events.list({ calendarId: 'primary', maxResults: 1 });
-      return true;
-    } catch {
-      return false;
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, reason: `${user}: ${probeReason(err)}` };
     }
   }
 }

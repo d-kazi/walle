@@ -15,6 +15,7 @@ import type {
   SchoolEmail,
 } from '../src/google/types.js';
 import type { BusyInterval, CalendarEventDraft, User } from '../src/types/domain.js';
+import type { ProbeOutcome } from '../src/channel/types.js';
 
 export interface SentRecord {
   to: string;
@@ -40,8 +41,8 @@ export class FakeSender implements ChannelSender {
     this.sent.push({ to, text: bodyParam, mode: 'template' });
     return { providerMsgId: `fake.${++this.counter}`, mode: 'template' };
   }
-  async probe(): Promise<boolean> {
-    return this.probeOk;
+  async probe(): Promise<ProbeOutcome> {
+    return this.probeOk ? { ok: true } : { ok: false, reason: 'fake: unreachable' };
   }
 }
 
@@ -136,8 +137,8 @@ export class FakeCalendar implements CalendarService {
     });
     return { id };
   }
-  async probe(): Promise<boolean> {
-    return this.probeOk;
+  async probe(): Promise<ProbeOutcome> {
+    return this.probeOk ? { ok: true } : { ok: false, reason: 'fake: unreachable' };
   }
 }
 
@@ -175,8 +176,8 @@ export class FakeForwardInbox implements ForwardInbox {
   bodiesFetched: string[] = [];
   probeOk = true;
 
-  async probe(): Promise<boolean> {
-    return this.probeOk;
+  async probe(): Promise<ProbeOutcome> {
+    return this.probeOk ? { ok: true } : { ok: false, reason: 'fake: unreachable' };
   }
 
   async listNewEmails(sinceIso: string): Promise<SchoolEmail[]> {

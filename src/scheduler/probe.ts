@@ -1,4 +1,5 @@
-import type { ChannelSender } from '../channel/types.js';
+import { probeReason } from '../channel/types.js';
+import type { ChannelSender, ProbeOutcome } from '../channel/types.js';
 import type { CalendarService, ForwardInbox } from '../google/types.js';
 import type { EventLog } from '../log/eventLog.js';
 
@@ -7,6 +8,8 @@ export type ProbeNeed = 'whatsapp' | 'calendar' | 'mail';
 export interface ProbeResult {
   ok: boolean;
   failed: ProbeNeed[];
+  /** why each failure happened, for /health and the log */
+  reasons: Partial<Record<ProbeNeed, string>>;
 }
 
 /**
@@ -26,24 +29,29 @@ export class Prober {
 
   async probe(jobName: string, needs: ProbeNeed[]): Promise<ProbeResult> {
     const failed: ProbeNeed[] = [];
+    const reasons: Partial<Record<ProbeNeed, string>> = {};
     for (const need of needs) {
-      let ok = false;
+      let outcome: ProbeOutcome;
       try {
-        if (need === 'whatsapp') ok = await this.sender.probe();
-        else if (need === 'calendar')
-          ok = (await this.calendar.probe('dan')) && (await this.calendar.probe('alina'));
-        else if (need === 'mail') ok = await this.mail.probe();
-      } catch {
-        ok = false;
+        if (need === 'whatsapp') outcome = await this.sender.probe();
+        else if (need === 'calendar') {
+          const dan = await this.calendar.probe('dan');
+          outcome = dan.ok ? await this.calendar.probe('alina') : dan;
+        } else outcome = await this.mail.probe();
+      } catch (err) {
+        outcome = { ok: false, reason: probeReason(err) };
       }
-      if (!ok) failed.push(need);
+      if (!outcome.ok) {
+        failed.push(need);
+        reasons[need] = outcome.reason;
+      }
     }
     this.log.append({
       actor: 'system',
       chat: null,
       type: 'probe',
-      payload: { job: jobName, needs, failed, ok: failed.length === 0 },
+      payload: { job: jobName, needs, failed, ok: failed.length === 0, ...(failed.length > 0 ? { reasons } : {}) },
     });
-    return { ok: failed.length === 0, failed };
+    return { ok: failed.length === 0, failed, reasons };
   }
 }

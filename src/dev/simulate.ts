@@ -31,6 +31,7 @@ import type {
   SendResult,
 } from '../channel/types.js';
 import type { CalendarEvent, CalendarService } from '../google/types.js';
+import type { ProbeOutcome } from '../channel/types.js';
 import type { BusyInterval, CalendarEventDraft, User } from '../types/domain.js';
 
 const WA_DAN = 'sim-dan';
@@ -57,8 +58,8 @@ class ConsoleSender implements ChannelSender {
     console.log(`\n→ [${this.label(to)}] (template) ${body}\n`);
     return { providerMsgId: `sim.${++this.n}`, mode: 'template' };
   }
-  async probe(): Promise<boolean> {
-    return true;
+  async probe(): Promise<ProbeOutcome> {
+    return { ok: true };
   }
 }
 
@@ -79,8 +80,8 @@ class SimCalendar implements CalendarService {
     console.log(`\n== family calendar write: ${draft.title} @ ${draft.start} ==\n`);
     return { id };
   }
-  async probe(): Promise<boolean> {
-    return true;
+  async probe(): Promise<ProbeOutcome> {
+    return { ok: true };
   }
 }
 

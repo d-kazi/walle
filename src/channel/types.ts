@@ -57,12 +57,21 @@ export interface SendResult {
  * outbound layer above this resolves users to ids and enforces the
  * allow-list; the channel just transports.
  */
+/** A dependency check that says why it failed, not just that it did. */
+export type ProbeOutcome = { ok: true } | { ok: false; reason: string };
+
+/** Google's "insufficient scope" and friends are long; keep the useful head of it. */
+export function probeReason(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.replace(/\s+/g, ' ').slice(0, 200);
+}
+
 export interface ChannelSender {
   sendText(to: string, text: string): Promise<SendResult>;
   sendButtons(to: string, text: string, buttons: OutboundButton[]): Promise<SendResult>;
   sendTemplate(to: string, templateName: string, bodyParam: string): Promise<SendResult>;
   /** cheap reachability check for job probes */
-  probe(): Promise<boolean>;
+  probe(): Promise<ProbeOutcome>;
 }
 
 export interface MediaFetcher {

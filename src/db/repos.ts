@@ -37,26 +37,30 @@ export class Repos {
    * Dependencies whose latest probe failed, with the time of the first
    * failure in the current run of failures. Feeds the morning brief's one line.
    */
-  outages(sinceIso: string): Array<{ need: string; since: string }> {
+  outages(sinceIso: string): Array<{ need: string; since: string; reason: string }> {
     const probes = this.eventsSince(sinceIso, ['probe']) as Array<{
       ts: string;
-      payload: { needs?: string[]; failed?: string[] };
+      payload: { needs?: string[]; failed?: string[]; reasons?: Record<string, string> };
     }>;
-    const state = new Map<string, { failing: boolean; since: string }>();
+    const state = new Map<string, { failing: boolean; since: string; reason: string }>();
     for (const p of probes) {
       for (const need of p.payload.needs ?? []) {
         const failed = (p.payload.failed ?? []).includes(need);
         const prev = state.get(need);
         if (failed) {
-          state.set(need, { failing: true, since: prev?.failing ? prev.since : p.ts });
+          state.set(need, {
+            failing: true,
+            since: prev?.failing ? prev.since : p.ts,
+            reason: p.payload.reasons?.[need] ?? 'unknown',
+          });
         } else {
-          state.set(need, { failing: false, since: p.ts });
+          state.set(need, { failing: false, since: p.ts, reason: '' });
         }
       }
     }
     return [...state.entries()]
       .filter(([, v]) => v.failing)
-      .map(([need, v]) => ({ need, since: v.since }));
+      .map(([need, v]) => ({ need, since: v.since, reason: v.reason }));
   }
 
   // -- window --------------------------------------------------------------
