@@ -147,7 +147,6 @@ export class SchoolPipeline {
         title: `${extracted.event}${childLabel ? ` (${childLabel})` : ''}`,
         start,
         end,
-        calendar: 'alina',
         description: `From school email: ${email.subject}`,
       },
       'both',

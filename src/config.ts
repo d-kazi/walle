@@ -29,6 +29,8 @@ const envSchema = z.object({
   GOOGLE_REFRESH_ALINA: z.string().min(1),
   GOOGLE_REFRESH_WALLE: z.string().min(1),
   FAMILY_DRIVE_FOLDER_ID: z.string().min(1),
+  /** the shared family Google calendar; the only calendar Wall-E reads in full or writes to */
+  FAMILY_CALENDAR_ID: z.string().min(1),
 
   /** the two addresses allowed to forward mail into the walle inbox */
   EMAIL_DAN: z.string().email(),

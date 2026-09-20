@@ -14,7 +14,7 @@ import type {
   ForwardInbox,
   SchoolEmail,
 } from '../src/google/types.js';
-import type { CalendarEventDraft, User } from '../src/types/domain.js';
+import type { BusyInterval, CalendarEventDraft, User } from '../src/types/domain.js';
 
 export interface SentRecord {
   to: string;
@@ -115,10 +115,13 @@ export class FakeCalendar implements CalendarService {
   failCreate = false;
   private counter = 0;
 
-  async listEvents(user: User, fromIso: string, toIso: string): Promise<CalendarEvent[]> {
-    return this.events.filter(
-      (e) => e.calendar === user && e.start >= fromIso && e.start <= toIso,
-    );
+  async listFamilyEvents(fromIso: string, toIso: string): Promise<CalendarEvent[]> {
+    return this.events.filter((e) => e.start >= fromIso && e.start <= toIso);
+  }
+  /** personal busy blocks, set by tests; never carry a title */
+  busyBlocks: Record<User, BusyInterval[]> = { dan: [], alina: [] };
+  async busy(user: User, fromIso: string, toIso: string): Promise<BusyInterval[]> {
+    return this.busyBlocks[user].filter((b) => b.start < toIso && b.end > fromIso);
   }
   async createEvent(draft: CalendarEventDraft): Promise<{ id: string }> {
     if (this.failCreate) throw new Error('calendar unavailable');
@@ -129,7 +132,6 @@ export class FakeCalendar implements CalendarService {
       title: draft.title,
       start: draft.start,
       end: draft.end,
-      calendar: draft.calendar,
       allDay: false,
     });
     return { id };

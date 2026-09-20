@@ -31,7 +31,7 @@ import type {
   SendResult,
 } from '../channel/types.js';
 import type { CalendarEvent, CalendarService } from '../google/types.js';
-import type { CalendarEventDraft, User } from '../types/domain.js';
+import type { BusyInterval, CalendarEventDraft, User } from '../types/domain.js';
 
 const WA_DAN = 'sim-dan';
 const WA_ALINA = 'sim-alina';
@@ -65,13 +65,18 @@ class ConsoleSender implements ChannelSender {
 class SimCalendar implements CalendarService {
   events: CalendarEvent[] = [];
   private n = 0;
-  async listEvents(user: User, fromIso: string, toIso: string): Promise<CalendarEvent[]> {
-    return this.events.filter((e) => e.calendar === user && e.start >= fromIso && e.start < toIso);
+  async listFamilyEvents(fromIso: string, toIso: string): Promise<CalendarEvent[]> {
+    return this.events.filter((e) => e.start >= fromIso && e.start <= toIso);
+  }
+  /** personal busy blocks, set by tests; never carry a title */
+  busyBlocks: Record<User, BusyInterval[]> = { dan: [], alina: [] };
+  async busy(user: User, fromIso: string, toIso: string): Promise<BusyInterval[]> {
+    return this.busyBlocks[user].filter((b) => b.start < toIso && b.end > fromIso);
   }
   async createEvent(draft: CalendarEventDraft): Promise<{ id: string }> {
     const id = `sim-cal-${++this.n}`;
-    this.events.push({ id, title: draft.title, start: draft.start, end: draft.end, calendar: draft.calendar, allDay: false });
-    console.log(`\n== calendar write: ${draft.calendar} / ${draft.title} @ ${draft.start} ==\n`);
+    this.events.push({ id, title: draft.title, start: draft.start, end: draft.end, allDay: false });
+    console.log(`\n== family calendar write: ${draft.title} @ ${draft.start} ==\n`);
     return { id };
   }
   async probe(): Promise<boolean> {

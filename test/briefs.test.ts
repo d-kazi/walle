@@ -210,4 +210,33 @@ describe('briefs', () => {
     // the brief still went out and was recorded
     expect(stack.repos.lastBriefTs('dan', 'morning')).not.toBeNull();
   });
+
+  it('a clash is a family event with neither parent free; work calendar titles never appear', async () => {
+    const stack = makeFullStack(dir, clock);
+    stack.llm.on('assistant', 'Morning.');
+    for (const [wa, id] of [[WA_DAN, 'c1'], [WA_ALINA, 'c2']] as const) {
+      await stack.ingress.process(parseWebhookPayload(textPayload(wa, `wamid.${id}`, 'morning')));
+    }
+    stack.calendar.events = [
+      { id: 'f1', title: 'Caspian swimming', start: '2026-08-24T16:00:00+03:00', end: '2026-08-24T17:00:00+03:00', allDay: false },
+    ];
+    stack.calendar.busyBlocks = {
+      dan: [{ start: '2026-08-24T15:30:00+03:00', end: '2026-08-24T17:30:00+03:00' }],
+      alina: [{ start: '2026-08-24T16:00:00+03:00', end: '2026-08-24T18:00:00+03:00' }],
+    };
+    let input = '';
+    stack.llm.on('brief_morning', (opts) => {
+      input = String(opts.messages.at(-1)?.content ?? '');
+      return 'Morning.';
+    });
+    clock.set(new Date('2026-08-24T03:30:00Z'));
+    await makeBriefs(stack, clock).sendMorning('dan');
+    expect(input).toContain('Both of you are busy during Caspian swimming (16:00)');
+    expect(input).not.toContain('Strategic');
+
+    // one parent free: no clash
+    stack.calendar.busyBlocks.alina = [];
+    await makeBriefs(stack, clock).sendMorning('alina');
+    expect(input).not.toContain('Both of you are busy');
+  });
 });

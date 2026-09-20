@@ -1,41 +1,62 @@
 import { google } from 'googleapis';
 import type { GoogleAuths } from './auth.js';
 import type { CalendarEvent, CalendarService } from './types.js';
-import type { CalendarEventDraft, User } from '../types/domain.js';
+import type { BusyInterval, CalendarEventDraft, User } from '../types/domain.js';
 
 /**
- * Google Calendar over the two adult principals. Reads are Tier 1; writes
- * are only ever reached through the confirmation gate (Tier 2).
+ * Google Calendar. The family calendar is a shared calendar both adults and
+ * the walle account can edit; it is read through Dan's principal, whose
+ * calendar.events scope covers every calendar shared with him. Personal
+ * calendars are read as free/busy only. Writes happen only through the
+ * confirmation gate (Tier 2) and only to the family calendar.
  */
 export class GoogleCalendarService implements CalendarService {
-  constructor(private readonly auths: GoogleAuths) {}
+  constructor(
+    private readonly auths: GoogleAuths,
+    private readonly familyCalendarId: string,
+  ) {}
 
   private calendar(user: User) {
     return google.calendar({ version: 'v3', auth: this.auths.clientFor(user) });
   }
 
-  async listEvents(user: User, fromIso: string, toIso: string): Promise<CalendarEvent[]> {
-    const res = await this.calendar(user).events.list({
-      calendarId: 'primary',
+  async listFamilyEvents(fromIso: string, toIso: string): Promise<CalendarEvent[]> {
+    const res = await this.calendar('dan').events.list({
+      calendarId: this.familyCalendarId,
       timeMin: fromIso,
       timeMax: toIso,
       singleEvents: true,
       orderBy: 'startTime',
-      maxResults: 50,
+      maxResults: 100,
     });
     return (res.data.items ?? []).map((e) => ({
       id: e.id ?? '',
       title: e.summary ?? '(untitled)',
       start: e.start?.dateTime ?? (e.start?.date ? `${e.start.date}T00:00:00+03:00` : ''),
       end: e.end?.dateTime ?? (e.end?.date ? `${e.end.date}T00:00:00+03:00` : ''),
-      calendar: user,
       allDay: !e.start?.dateTime,
     }));
   }
 
-  async createEvent(draft: CalendarEventDraft): Promise<{ id: string }> {
-    const res = await this.calendar(draft.calendar).events.insert({
+  async busy(user: User, fromIso: string, toIso: string): Promise<BusyInterval[]> {
+    // events.list on primary, reduced to intervals before it leaves this method:
+    // no summary, no description, nothing a brief could repeat
+    const res = await this.calendar(user).events.list({
       calendarId: 'primary',
+      timeMin: fromIso,
+      timeMax: toIso,
+      singleEvents: true,
+      orderBy: 'startTime',
+      maxResults: 100,
+    });
+    return (res.data.items ?? [])
+      .filter((e) => e.start?.dateTime && e.end?.dateTime && e.transparency !== 'transparent')
+      .map((e) => ({ start: e.start!.dateTime!, end: e.end!.dateTime! }));
+  }
+
+  async createEvent(draft: CalendarEventDraft): Promise<{ id: string }> {
+    const res = await this.calendar('dan').events.insert({
+      calendarId: this.familyCalendarId,
       requestBody: {
         summary: draft.title,
         start: { dateTime: draft.start, timeZone: 'Asia/Riyadh' },
@@ -49,8 +70,6 @@ export class GoogleCalendarService implements CalendarService {
 
   async probe(user: User): Promise<boolean> {
     try {
-      // events.list is the call the briefs make and the one calendar.events permits;
-      // calendarList needs a wider scope and reported a false outage
       await this.calendar(user).events.list({ calendarId: 'primary', maxResults: 1 });
       return true;
     } catch {

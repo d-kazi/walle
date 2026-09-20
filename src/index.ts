@@ -74,7 +74,7 @@ const auths = createGoogleAuths({
     walle: env.GOOGLE_REFRESH_WALLE,
   },
 });
-const calendar = new GoogleCalendarService(auths);
+const calendar = new GoogleCalendarService(auths, env.FAMILY_CALENDAR_ID);
 const forwardInbox = new GmailForwardInbox(auths);
 const drive = new GoogleDriveService(auths, env.FAMILY_DRIVE_FOLDER_ID);
 

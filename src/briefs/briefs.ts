@@ -4,7 +4,7 @@ import type { LlmClient } from '../llm/client.js';
 import type { Outbound } from '../send/outbound.js';
 import type { LedgerReader } from '../ledger/read.js';
 import type { CalendarService, CalendarEvent } from '../google/types.js';
-import type { User } from '../types/domain.js';
+import type { BusyInterval, User } from '../types/domain.js';
 import { USERS, otherUser } from '../types/domain.js';
 import { composeBrief } from './compose.js';
 import { sharedAdditionsSince } from './sinceLastBrief.js';
@@ -43,19 +43,41 @@ export class Briefs {
     return this.deps.clock ?? systemClock;
   }
 
+  /** family calendar only; personal calendars never contribute content */
   private async calendarBetween(fromMs: number, toMs: number): Promise<CalendarEvent[]> {
-    const { calendar } = this.deps;
     const from = riyadhIso(new Date(fromMs));
     const to = riyadhIso(new Date(toMs));
-    const all: CalendarEvent[] = [];
+    try {
+      return (await this.deps.calendar.listFamilyEvents(from, to)).sort((a, b) =>
+        a.start.localeCompare(b.start),
+      );
+    } catch {
+      return []; // probe already reported; brief proceeds with what works
+    }
+  }
+
+  /**
+   * A family event during which neither parent is free, judged from their
+   * personal calendars as busy/free intervals. Titles of the busy blocks are
+   * never known here, by construction.
+   */
+  private async clashes(fromMs: number, toMs: number): Promise<string[]> {
+    const from = riyadhIso(new Date(fromMs));
+    const to = riyadhIso(new Date(toMs));
+    const events = (await this.calendarBetween(fromMs, toMs)).filter((e) => !e.allDay);
+    if (events.length === 0) return [];
+    const busy: Record<User, BusyInterval[]> = { dan: [], alina: [] };
     for (const user of USERS) {
       try {
-        all.push(...(await calendar.listEvents(user, from, to)));
+        busy[user] = await this.deps.calendar.busy(user, from, to);
       } catch {
-        // probe already reported; brief proceeds with what works
+        busy[user] = [];
       }
     }
-    return all.sort((a, b) => a.start.localeCompare(b.start));
+    const covered = (b: BusyInterval[], e: CalendarEvent) => b.some((x) => x.start < e.end && e.start < x.end);
+    return events
+      .filter((e) => covered(busy.dan, e) && covered(busy.alina, e))
+      .map((e) => `Both of you are busy during ${e.title} (${e.start.slice(11, 16)})`);
   }
 
   async sendMorning(user: User): Promise<void> {
@@ -120,7 +142,8 @@ export class Briefs {
       user,
       date: today,
       sections: {
-        calendarToday: events.map((e) => `${e.start.slice(11, 16)} ${e.title} (${e.calendar})`),
+        calendarToday: events.map((e) => (e.allDay ? e.title : `${e.start.slice(11, 16)} ${e.title}`)),
+        clashes: await this.clashes(startOfDay, startOfDay + DAY_MS),
         openItemsDueSoon: items
           .filter((i) => i.due)
           .map((i) => `${i.title}, due ${i.due}${i.child ? `, ${i.child}` : ''}`),
@@ -158,7 +181,8 @@ export class Briefs {
       user,
       date: today,
       sections: {
-        tomorrow: events.map((e) => `${e.start.slice(11, 16)} ${e.title} (${e.calendar})`),
+        tomorrow: events.map((e) => (e.allDay ? e.title : `${e.start.slice(11, 16)} ${e.title}`)),
+        clashesTomorrow: await this.clashes(startOfTomorrow, startOfTomorrow + DAY_MS),
         unconfirmedProposals: pending.map(describeProposal),
         childTimeQuestion: 'ask it, verbatim, as the closing line',
       },
@@ -195,18 +219,9 @@ export class Briefs {
       }
     }
 
-    // 2. calendar conflict today or tomorrow
+    // 2. a family event today or tomorrow with neither parent free
     const startOfDay = Date.parse(`${today}T00:00:00+03:00`);
-    const events = await this.calendarBetween(startOfDay, startOfDay + 2 * DAY_MS);
-    for (let i = 0; i < events.length - 1; i++) {
-      const a = events[i]!;
-      for (let j = i + 1; j < events.length; j++) {
-        const b = events[j]!;
-        if (b.start < a.end && a.calendar === b.calendar) {
-          triggers.push(`Clash in ${cap(a.calendar)}'s calendar: ${a.title} overlaps ${b.title}`);
-        }
-      }
-    }
+    triggers.push(...(await this.clashes(startOfDay, startOfDay + 2 * DAY_MS)));
 
     // 3. confirmed deadline expiring today still open
     for (const item of d.repos.openItems()) {

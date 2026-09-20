@@ -189,12 +189,12 @@ export class Confirmations {
             id,
             proposalId: proposal.id,
             op: 'create',
-            calendar: draft.calendar,
+            calendar: 'family',
             status: 'confirmed',
             draft: proposal.payload,
           },
         });
-        await this.outbound.send(user, { text: `Done. ${draft.title} is in the calendar.` });
+        await this.outbound.send(user, { text: `Done. ${draft.title} is in the family calendar.` });
       } catch (err) {
         this.log.append({
           actor: 'system',

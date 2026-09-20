@@ -62,6 +62,8 @@ That second filter is the door. Wall·E holds no delete permission and cannot bi
 
 Finally: share your family Drive folder with the Wall·E account (right-click the folder → Share → paste the address → Editor). Editor rather than Viewer, so the nightly backup can write into it. Note the folder ID from its URL: `drive.google.com/drive/folders/THIS_PART`.
 
+**The family calendar.** In Google Calendar create a calendar called *Kaziyev family*. Share it with Alina and with the Wall·E address, both as *Make changes to events*. Settings → Integrate calendar → copy the Calendar ID; that is `FAMILY_CALENDAR_ID`. This is the only calendar Wall·E reads in full or writes to. Your own calendars are read as busy/free intervals only, so a work block never appears in a brief; it only tells Wall·E when you are not free.
+
 Save the Wall·E address as a contact called Wall·E on both your phones. Forwarding then takes two taps.
 
 ---
@@ -165,6 +167,7 @@ Everything in the table below is required except `META_WABA_ID` and `WALLE_MODEL
 | `GROQ_API_KEY` | section 5 |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | section 4 |
 | `GOOGLE_REFRESH_WALLE`, `GOOGLE_REFRESH_DAN`, `GOOGLE_REFRESH_ALINA` | section 4, the three printed lines |
+| `FAMILY_CALENDAR_ID` | section 2; the shared family calendar's id from its Settings → Integrate calendar |
 | `FAMILY_DRIVE_FOLDER_ID` | section 2, from the folder URL |
 | `EMAIL_DAN`, `EMAIL_ALINA` | your two personal email addresses; with the school, the only senders the Wall·E inbox accepts |
 | `SCHOOL_KEYWORDS` | optional, default `bisr`; comma-separated words that mark school mail |

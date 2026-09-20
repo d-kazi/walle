@@ -176,11 +176,21 @@ export function buildTools(deps: {
       const days = typeof args.days === 'number' && args.days > 0 ? Math.min(args.days, 31) : 7;
       const from = clock.now();
       const to = new Date(from.getTime() + days * 24 * 3_600_000);
-      const events = [
-        ...(await deps.calendar.listEvents('dan', riyadhIso(from), riyadhIso(to))),
-        ...(await deps.calendar.listEvents('alina', riyadhIso(from), riyadhIso(to))),
-      ].sort((a, b) => a.start.localeCompare(b.start));
-      return { events };
+      const fromIso = riyadhIso(from);
+      const toIso = riyadhIso(to);
+      const events = await deps.calendar.listFamilyEvents(fromIso, toIso);
+      // personal calendars as intervals only: when each parent is busy, never what with
+      const busy: Record<string, string[]> = {};
+      for (const u of ['dan', 'alina'] as const) {
+        try {
+          busy[u] = (await deps.calendar.busy(u, fromIso, toIso)).map(
+            (b) => `${b.start.slice(0, 16).replace('T', ' ')} to ${b.end.slice(11, 16)}`,
+          );
+        } catch {
+          busy[u] = [];
+        }
+      }
+      return { familyEvents: events, busy };
     },
   };
 
@@ -195,10 +205,9 @@ export function buildTools(deps: {
           title: { type: 'string' },
           start: { type: 'string', description: 'ISO datetime with +03:00 offset' },
           end: { type: 'string', description: 'ISO datetime with +03:00 offset' },
-          calendar: { type: 'string', enum: ['dan', 'alina'] },
           description: { type: 'string' },
         },
-        required: ['title', 'start', 'end', 'calendar'],
+        required: ['title', 'start', 'end'],
         additionalProperties: false,
       },
     },
@@ -207,7 +216,6 @@ export function buildTools(deps: {
         title: String(args.title ?? ''),
         start: String(args.start ?? ''),
         end: String(args.end ?? ''),
-        calendar: args.calendar === 'alina' ? 'alina' : 'dan',
         ...(typeof args.description === 'string' ? { description: args.description } : {}),
       };
       if (!draft.title || !draft.start || !draft.end) return { error: 'missing fields' };
@@ -215,7 +223,7 @@ export function buildTools(deps: {
         'calendar_event',
         draft,
         ctx.user,
-        `Add to ${draft.calendar === 'dan' ? "Dan's" : "Alina's"} calendar: ${draft.title}, ${draft.start.slice(0, 16).replace('T', ' ')}?`,
+        `Add to the family calendar: ${draft.title}, ${draft.start.slice(0, 16).replace('T', ' ')}?`,
       );
       return { proposalId: id, awaitingConfirmation: true };
     },

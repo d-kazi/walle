@@ -1,4 +1,4 @@
-import type { CalendarEventDraft, User } from '../types/domain.js';
+import type { BusyInterval, CalendarEventDraft, User } from '../types/domain.js';
 
 /**
  * Interfaces over the Google surface. Real implementations live beside this
@@ -14,12 +14,18 @@ export interface CalendarEvent {
   title: string;
   start: string; // ISO
   end: string; // ISO
-  calendar: User;
   allDay: boolean;
 }
 
+/**
+ * Two kinds of calendar, read very differently. The shared family calendar
+ * is read in full and is the only one ever written to. The two personal
+ * calendars are read as busy/free intervals only: their contents never
+ * reach a brief or the model, they only answer "is this parent free then".
+ */
 export interface CalendarService {
-  listEvents(user: User, fromIso: string, toIso: string): Promise<CalendarEvent[]>;
+  listFamilyEvents(fromIso: string, toIso: string): Promise<CalendarEvent[]>;
+  busy(user: User, fromIso: string, toIso: string): Promise<BusyInterval[]>;
   createEvent(draft: CalendarEventDraft): Promise<{ id: string }>;
   probe(user: User): Promise<boolean>;
 }

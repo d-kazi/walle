@@ -30,13 +30,19 @@ export interface OpenItem {
 
 export type ProposalKind = 'calendar_event' | 'open_item' | 'forwarded_email';
 
+/** Every write goes to the shared family calendar; there is no other target. */
 export interface CalendarEventDraft {
   title: string;
   start: string; // ISO datetime
   end: string; // ISO datetime
-  calendar: User; // whose Google calendar
   description?: string;
   location?: string;
+}
+
+/** a busy interval from a personal calendar; the title is deliberately not carried */
+export interface BusyInterval {
+  start: string;
+  end: string;
 }
 
 export interface Proposal {

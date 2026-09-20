@@ -106,7 +106,6 @@ describe('assistant conversation', () => {
         title: 'Swimming gala',
         start: '2026-08-27T15:00:00+03:00',
         end: '2026-08-27T17:00:00+03:00',
-        calendar: 'alina',
       }),
       "I've proposed it; confirm with the buttons.",
     );
@@ -147,7 +146,7 @@ describe('assistant conversation', () => {
     const stack = makeFullStack(dir, clock);
     const id = await stack.confirmations.propose(
       'calendar_event',
-      { title: 'Gala', start: '2026-08-27T15:00:00+03:00', end: '2026-08-27T16:00:00+03:00', calendar: 'dan' },
+      { title: 'Gala', start: '2026-08-27T15:00:00+03:00', end: '2026-08-27T16:00:00+03:00' },
       'dan',
       'Add the gala?',
     );
@@ -162,7 +161,6 @@ describe('assistant conversation', () => {
         title: 'Gala',
         start: '2026-08-27T16:00:00+03:00',
         end: '2026-08-27T17:00:00+03:00',
-        calendar: 'dan',
       }),
       'Proposed the later time.',
     );
