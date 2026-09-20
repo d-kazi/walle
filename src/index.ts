@@ -163,8 +163,11 @@ app.use(
   }),
 );
 
-// schedules, all Asia/Riyadh, probe-first (PRD §5)
-registerJobs(log, [
+// schedules, all Asia/Riyadh, probe-first (PRD §5).
+// WALLE_PAUSED=true keeps only the nightly backup: no briefs, no polls, no proposals.
+const paused = env.WALLE_PAUSED === 'true';
+if (paused) console.log('walle paused: scheduled messages off, chat on');
+registerJobs(log, paused ? [] : [
   {
     name: 'Morning brief',
     schedule: '30 6 * * *',
@@ -227,6 +230,8 @@ registerJobs(log, [
       await weekly.send();
     },
   },
+]);
+registerJobs(log, [
   {
     name: 'Backup',
     schedule: '0 2 * * *',

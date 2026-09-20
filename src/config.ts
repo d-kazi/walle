@@ -38,6 +38,9 @@ const envSchema = z.object({
 
   LEDGER_PUSH_TOKEN: z.string().min(16),
 
+  /** "true" stops every scheduled message (briefs, midday, weekly, mail proposals); chat still answers */
+  WALLE_PAUSED: z.enum(['true', 'false']).default('false'),
+
   TZ: z.string().default('Asia/Riyadh'),
   PORT: z.coerce.number().int().default(3000),
   DATA_DIR: z.string().default('/data'),
