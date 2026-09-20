@@ -231,7 +231,16 @@ registerJobs(log, paused ? [] : [
     },
   },
 ]);
+// Always on, paused or not. Probes send nothing; pausing stops messages, not
+// observation, so /health keeps saying why a dependency is down.
 registerJobs(log, [
+  {
+    name: 'Dependency check',
+    schedule: '20 * * * *',
+    run: async () => {
+      await prober.probe('Dependency check', ['whatsapp', 'calendar', 'mail']);
+    },
+  },
   {
     name: 'Backup',
     schedule: '0 2 * * *',
@@ -242,6 +251,7 @@ registerJobs(log, [
 ]);
 
 app.listen(config.port, () => {
+  void prober.probe('Startup', ['whatsapp', 'calendar', 'mail']);
   log.append({
     actor: 'system',
     chat: null,
