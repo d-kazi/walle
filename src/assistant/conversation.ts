@@ -3,6 +3,7 @@ import type { EventLog } from '../log/eventLog.js';
 import type { Repos } from '../db/repos.js';
 import type { MemoryStore } from '../memory/store.js';
 import type { LedgerReader } from '../ledger/read.js';
+import type { WeekTemplate } from '../week/template.js';
 import type { CalendarService, DriveService, SchoolEmail } from '../google/types.js';
 import type { LlmClient } from '../llm/client.js';
 import type { Outbound } from '../send/outbound.js';
@@ -35,6 +36,7 @@ export class Conversation {
       llm: LlmClient;
       outbound: Outbound;
       confirmations: Confirmations;
+      week?: WeekTemplate;
       clock?: Clock;
     },
   ) {
@@ -43,6 +45,7 @@ export class Conversation {
       deps.repos,
       deps.ledger,
       deps.clock ?? systemClock,
+      deps.week,
     );
   }
 
@@ -116,6 +119,7 @@ export class Conversation {
       ledger: d.ledger,
       calendar: d.calendar,
       confirmations: d.confirmations,
+      ...(d.week ? { week: d.week } : {}),
       ...(d.drive ? { drive: d.drive } : {}),
       clock: this.clock,
       ctx: { user, forcedScope: forced?.scope ?? null },

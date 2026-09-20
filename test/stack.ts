@@ -8,6 +8,7 @@ import { Ingress } from '../src/ingress/inbound.js';
 import { EventLog } from '../src/log/eventLog.js';
 import { readAllEvents } from '../src/log/logReader.js';
 import { MemoryStore } from '../src/memory/store.js';
+import { WeekTemplate } from '../src/week/template.js';
 import { LedgerReader } from '../src/ledger/read.js';
 import { Outbound } from '../src/send/outbound.js';
 import { Confirmations } from '../src/assistant/confirmations.js';
@@ -44,6 +45,7 @@ export function makeFullStack(dir: string, clock: FakeClock) {
   const sender = new FakeSender();
   const outbound = new Outbound(sender, allowList, repos, log, clock);
   const memory = new MemoryStore(dir);
+  const week = new WeekTemplate(dir);
   const ledger = new LedgerReader(dir, clock);
   const calendar = new FakeCalendar();
   const forwardInbox = new FakeForwardInbox();
@@ -65,6 +67,7 @@ export function makeFullStack(dir: string, clock: FakeClock) {
     log,
     repos,
     memory,
+    week,
     ledger,
     calendar,
     llm,
@@ -104,6 +107,7 @@ export function makeFullStack(dir: string, clock: FakeClock) {
     sender,
     outbound,
     memory,
+    week,
     ledger,
     calendar,
     school,

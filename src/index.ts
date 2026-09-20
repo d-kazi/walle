@@ -14,6 +14,7 @@ import { Ingress } from './ingress/inbound.js';
 import { GroqTranscriber } from './transcribe/groq.js';
 import { OpenAiCompatClient } from './llm/client.js';
 import { MemoryStore } from './memory/store.js';
+import { WeekTemplate } from './week/template.js';
 import { Curator } from './memory/curator.js';
 import { LedgerReader } from './ledger/read.js';
 import { createLedgerRouter } from './ledger/route.js';
@@ -62,6 +63,7 @@ const llm = new OpenAiCompatClient(
   log,
 );
 const memory = new MemoryStore(config.dataDir);
+const week = new WeekTemplate(config.dataDir);
 const ledger = new LedgerReader(config.dataDir);
 
 // google, three principals
@@ -103,6 +105,7 @@ const conversation = new Conversation({
   llm,
   outbound,
   confirmations,
+  week,
 });
 const ingress = new Ingress(
   log,

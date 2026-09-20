@@ -8,6 +8,7 @@ import { fenceUntrusted } from '../llm/untrusted.js';
 import type { Confirmations } from './confirmations.js';
 import type { ToolHandler } from '../llm/toolLoop.js';
 import type { Child, MemoryScope, User } from '../types/domain.js';
+import { WEEKDAY_NAMES, type Activity, type DaySlot, type Responsible, type Weekday, type WeekTemplate } from '../week/template.js';
 import { CHILDREN } from '../types/domain.js';
 import { recordChildTime } from '../childtime/capture.js';
 import { type Clock, riyadhDate, riyadhIso, systemClock } from '../util/time.js';
@@ -30,6 +31,7 @@ export function buildTools(deps: {
   ledger: LedgerReader;
   calendar: CalendarService;
   confirmations: Confirmations;
+  week?: WeekTemplate;
   drive?: DriveService;
   clock?: Clock;
   ctx: ToolContext;
@@ -285,8 +287,103 @@ export function buildTools(deps: {
     },
   };
 
+
+  const readStandingWeek: ToolHandler = {
+    def: {
+      name: 'read_standing_week',
+      description:
+        "The family's ordinary week: what each child normally does on each weekday, and what is still unknown about it. Read this before answering anything about a child's day, so you can say what is different rather than repeating the usual.",
+      parameters: { type: 'object', properties: {}, additionalProperties: false },
+    },
+    async run() {
+      const week = deps.week;
+      if (!week) return { error: 'standing week unavailable' };
+      return { standingWeek: week.render(), gaps: week.gaps() };
+    },
+  };
+
+  const setStandingWeekDay: ToolHandler = {
+    def: {
+      name: 'set_standing_week_day',
+      description:
+        "Record what one child normally does on one weekday. This is the standing pattern, not a one-off: a dentist appointment next Tuesday is a calendar event, not this. Replaces whatever was stored for that child and day, so send the whole day each time.",
+      parameters: {
+        type: 'object',
+        properties: {
+          child: { type: 'string', enum: [...CHILDREN] },
+          weekday: {
+            type: 'string',
+            enum: [...WEEKDAY_NAMES],
+            description: 'the weekday this describes',
+          },
+          school: { type: 'boolean', description: 'is it a school or nursery day' },
+          start: { type: 'string', description: 'HH:mm school starts' },
+          end: { type: 'string', description: 'HH:mm school ends' },
+          activities: {
+            type: 'array',
+            description: 'clubs, lessons, anything recurring that day',
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                from: { type: 'string', description: 'HH:mm' },
+                kit: { type: 'array', items: { type: 'string' }, description: 'what to take' },
+              },
+              required: ['name'],
+              additionalProperties: false,
+            },
+          },
+          dropOff: { type: 'string', enum: ['dan', 'alina', 'either', 'bus', 'nobody'] },
+          pickUp: { type: 'string', enum: ['dan', 'alina', 'either', 'bus', 'nobody'] },
+          notes: { type: 'string', description: 'anything else that is true every week' },
+        },
+        required: ['child', 'weekday', 'school'],
+        additionalProperties: false,
+      },
+    },
+    async run(args) {
+      const week = deps.week;
+      if (!week) return { error: 'standing week unavailable' };
+      const child = args.child as Child;
+      if (!CHILDREN.includes(child)) return { error: 'unknown child' };
+      const dayIndex = WEEKDAY_NAMES.indexOf(String(args.weekday ?? '') as (typeof WEEKDAY_NAMES)[number]);
+      if (dayIndex < 0) return { error: 'unknown weekday' };
+      const weekday = dayIndex as Weekday;
+
+      const rawActivities = Array.isArray(args.activities) ? args.activities : [];
+      const activities: Activity[] = rawActivities
+        .map((a) => a as { name?: unknown; from?: unknown; kit?: unknown })
+        .filter((a) => typeof a.name === 'string' && a.name.trim() !== '')
+        .map((a) => ({
+          name: String(a.name).trim(),
+          ...(typeof a.from === 'string' ? { from: a.from } : {}),
+          ...(Array.isArray(a.kit) ? { kit: a.kit.map(String) } : {}),
+        }));
+
+      const slot: DaySlot = {
+        school: Boolean(args.school),
+        ...(typeof args.start === 'string' ? { start: args.start } : {}),
+        ...(typeof args.end === 'string' ? { end: args.end } : {}),
+        activities,
+        ...(typeof args.dropOff === 'string' ? { dropOff: args.dropOff as Responsible } : {}),
+        ...(typeof args.pickUp === 'string' ? { pickUp: args.pickUp as Responsible } : {}),
+        ...(typeof args.notes === 'string' && args.notes.trim() !== '' ? { notes: args.notes.trim() } : {}),
+      };
+      week.setDay(child, weekday, slot);
+      deps.log.append({
+        actor: ctx.user,
+        chat: ctx.user,
+        type: 'memory_op',
+        payload: { op: 'set_week_day', child, weekday: WEEKDAY_NAMES[weekday], slot },
+      });
+      return { saved: true, day: week.describeDay(child, weekday), remainingGaps: week.gaps().length };
+    },
+  };
+
   const tools = [
     remember,
+    readStandingWeek,
+    setStandingWeekDay,
     listOpenItems,
     createOpenItem,
     completeOpenItem,

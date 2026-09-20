@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import type { Repos } from '../db/repos.js';
 import type { MemoryStore } from '../memory/store.js';
 import type { LedgerReader } from '../ledger/read.js';
+import type { WeekTemplate } from '../week/template.js';
 import type { ChatMessage } from '../llm/client.js';
 import type { User } from '../types/domain.js';
 import { CHILDREN } from '../types/domain.js';
@@ -30,6 +31,7 @@ export class ContextBuilder {
     private readonly repos: Repos,
     private readonly ledger: LedgerReader,
     private readonly clock: Clock = systemClock,
+    private readonly week?: WeekTemplate,
   ) {
     this.core = loadPrompt('assistant.core.md');
     this.personas = {
@@ -42,6 +44,12 @@ export class ContextBuilder {
     const sections: string[] = [this.core, this.personas[user]];
 
     sections.push(`## Now\nCurrent date and time in Riyadh: ${riyadhIso(this.clock.now())}`);
+
+    if (this.week) {
+      // the ordinary week, so the model can say what is different about today
+      // rather than reciting what both parents already know
+      sections.push(`## The standing week\n${this.week.render()}`);
+    }
 
     const shared = this.memory.activeFacts({ kind: 'shared' });
     sections.push(`## Shared family memory\n${shared.join('\n') || '(nothing yet)'}`);
